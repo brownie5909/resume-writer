@@ -19,25 +19,29 @@ app.add_middleware(
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Request Models
-class ResumeRequest(BaseModel):
-    name: str
-    contact_info: str
-    work_history: str
-    job_description: str
-
 class ATSRequest(BaseModel):
     resume_text: str
     job_description: str
 
-# Resume Generation (JSON Only)
+# Resume Generation (Manual JSON Parsing to support forms)
 @app.post("/generate-resume")
-async def generate_resume(request: ResumeRequest):
+async def generate_resume(req: Request):
+    data = await req.json()
+
+    name = data.get("name")
+    contact_info = data.get("contact_info")
+    work_history = data.get("work_history")
+    job_description = data.get("job_description")
+
+    if None in (name, contact_info, work_history, job_description):
+        raise HTTPException(status_code=400, detail="Missing required fields.")
+
     prompt = f'''
-    Create a professional resume for {request.name}.
-    Contact Info: {request.contact_info}
-    Work History: {request.work_history}
+    Create a professional resume for {name}.
+    Contact Info: {contact_info}
+    Work History: {work_history}
     Tailor the resume to the following job description:
-    {request.job_description}
+    {job_description}
     Make it ATS-friendly with action verbs and concise bullet points.
     '''
 
@@ -51,15 +55,25 @@ async def generate_resume(request: ResumeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Cover Letter Generation (JSON Only)
+# Cover Letter Generation (Manual JSON Parsing to support forms)
 @app.post("/generate-cover-letter")
-async def generate_cover_letter(request: ResumeRequest):
+async def generate_cover_letter(req: Request):
+    data = await req.json()
+
+    name = data.get("name")
+    contact_info = data.get("contact_info")
+    work_history = data.get("work_history")
+    job_description = data.get("job_description")
+
+    if None in (name, contact_info, work_history, job_description):
+        raise HTTPException(status_code=400, detail="Missing required fields.")
+
     prompt = f'''
-    Write a cover letter for {request.name}.
-    Contact Info: {request.contact_info}
-    Work History: {request.work_history}
+    Write a cover letter for {name}.
+    Contact Info: {contact_info}
+    Work History: {work_history}
     Tailor it to the following job description:
-    {request.job_description}
+    {job_description}
     Use a professional and confident tone.
     '''
 
