@@ -42,8 +42,14 @@ async def generate_resume(req: Request):
     work_history = str(data.get("work_history", "")).strip()
     job_description = str(data.get("job_description", "")).strip()
 
-    if not all([name, contact_info, work_history, job_description]):
-        raise HTTPException(status_code=400, detail="All fields are required.")
+    missing = []
+    if not name: missing.append("name")
+    if not contact_info: missing.append("contact_info")
+    if not work_history: missing.append("work_history")
+    if not job_description: missing.append("job_description")
+
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing fields: {', '.join(missing)}")
 
     prompt = f'''
     Create a professional resume for {name}.
