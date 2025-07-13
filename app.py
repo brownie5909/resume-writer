@@ -106,18 +106,16 @@ async def ats_check(request: ATSRequest):
 
 @app.post("/debug-webhook")
 async def debug_webhook(request: Request):
-    import os
     headers = dict(request.headers)
     body = await request.body()
     decoded_body = body.decode("utf-8", errors="replace")
 
     log_entry = f"=== New Request ===\nHeaders: {headers}\nBody: {decoded_body}\n\n"
 
-    log_path = "/mnt/data/elementor_debug.log"
+    log_dir = "/mnt/data"
+    log_path = f"{log_dir}/elementor_debug.log"
 
-    if not os.path.exists(log_path):
-        with open(log_path, "w") as f:
-            f.write("=== Elementor Debug Log Initialized ===\n")
+    os.makedirs(log_dir, exist_ok=True)
 
     with open(log_path, "a") as f:
         f.write(log_entry)
