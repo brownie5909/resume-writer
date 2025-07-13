@@ -23,7 +23,7 @@ class ATSRequest(BaseModel):
     resume_text: str
     job_description: str
 
-# Resume Generation (Safe JSON/Form Handling)
+# Resume Generation (Safe JSON/Form Handling with Empty Check)
 @app.post("/generate-resume")
 async def generate_resume(req: Request):
     try:
@@ -32,13 +32,13 @@ async def generate_resume(req: Request):
         form = await req.form()
         data = form
 
-    name = data.get("name")
-    contact_info = data.get("contact_info")
-    work_history = data.get("work_history")
-    job_description = data.get("job_description")
+    name = data.get("name", "").strip()
+    contact_info = data.get("contact_info", "").strip()
+    work_history = data.get("work_history", "").strip()
+    job_description = data.get("job_description", "").strip()
 
-    if None in (name, contact_info, work_history, job_description):
-        raise HTTPException(status_code=400, detail="Missing required fields.")
+    if not all([name, contact_info, work_history, job_description]):
+        raise HTTPException(status_code=400, detail="All fields are required.")
 
     prompt = f'''
     Create a professional resume for {name}.
@@ -59,7 +59,7 @@ async def generate_resume(req: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Cover Letter Generation (Safe JSON/Form Handling)
+# Cover Letter Generation (Safe JSON/Form Handling with Empty Check)
 @app.post("/generate-cover-letter")
 async def generate_cover_letter(req: Request):
     try:
@@ -68,13 +68,13 @@ async def generate_cover_letter(req: Request):
         form = await req.form()
         data = form
 
-    name = data.get("name")
-    contact_info = data.get("contact_info")
-    work_history = data.get("work_history")
-    job_description = data.get("job_description")
+    name = data.get("name", "").strip()
+    contact_info = data.get("contact_info", "").strip()
+    work_history = data.get("work_history", "").strip()
+    job_description = data.get("job_description", "").strip()
 
-    if None in (name, contact_info, work_history, job_description):
-        raise HTTPException(status_code=400, detail="Missing required fields.")
+    if not all([name, contact_info, work_history, job_description]):
+        raise HTTPException(status_code=400, detail="All fields are required.")
 
     prompt = f'''
     Write a cover letter for {name}.
