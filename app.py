@@ -49,7 +49,10 @@ async def generate_resume(req: Request):
     if not job_description: missing.append("job_description")
 
     if missing:
-        raise HTTPException(status_code=400, detail=f"Missing fields: {', '.join(missing)}")
+        return {
+            "success": False,
+            "error": f"Missing fields: {', '.join(missing)}"
+        }
 
     prompt = f'''
     Create a professional resume for {name}.
