@@ -112,10 +112,7 @@ async def debug_webhook(request: Request):
 
     log_entry = f"=== New Request ===\nHeaders: {headers}\nBody: {decoded_body}\n\n"
 
-    log_dir = "/mnt/data"
-    log_path = f"{log_dir}/elementor_debug.log"
-
-    os.makedirs(log_dir, exist_ok=True)
+    log_path = "elementor_debug.log"
 
     with open(log_path, "a") as f:
         f.write(log_entry)
