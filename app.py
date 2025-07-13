@@ -69,7 +69,10 @@ async def generate_resume(req: Request):
             messages=[{"role": "user", "content": prompt}],
             max_tokens=800
         )
-        return {"resume": response.choices[0].message.content}
+        return {
+            "success": True,
+            "resume": response.choices[0].message.content
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
