@@ -23,11 +23,17 @@ class ATSRequest(BaseModel):
     resume_text: str
     job_description: str
 
-# Resume Generation (Robust JSON Handling)
+# Resume Generation (Final Robust Handler)
 @app.post("/generate-resume")
 async def generate_resume(req: Request):
-    data = await req.json()
-    data = {k.lower(): v for k, v in data.items()}
+    try:
+        data = await req.json()
+        if not data:
+            raise ValueError("Empty JSON payload.")
+        data = {k.lower(): v for k, v in data.items()}
+    except Exception:
+        form = await req.form()
+        data = {k.lower(): v for k, v in form.items()}
 
     name = str(data.get("name", "")).strip()
     contact_info = str(data.get("contact_info", "")).strip()
@@ -56,11 +62,17 @@ async def generate_resume(req: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Cover Letter Generation (Robust JSON Handling)
+# Cover Letter Generation (Final Robust Handler)
 @app.post("/generate-cover-letter")
 async def generate_cover_letter(req: Request):
-    data = await req.json()
-    data = {k.lower(): v for k, v in data.items()}
+    try:
+        data = await req.json()
+        if not data:
+            raise ValueError("Empty JSON payload.")
+        data = {k.lower(): v for k, v in data.items()}
+    except Exception:
+        form = await req.form()
+        data = {k.lower(): v for k, v in form.items()}
 
     name = str(data.get("name", "")).strip()
     contact_info = str(data.get("contact_info", "")).strip()
