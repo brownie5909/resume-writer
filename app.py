@@ -9,21 +9,18 @@ app = FastAPI()
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For production, replace * with your domain
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# OpenAI Client Initialization
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Request Models
 class ATSRequest(BaseModel):
     resume_text: str
     job_description: str
 
-# Resume Generation (Final Robust Handler)
 @app.post("/generate-resume")
 async def generate_resume(req: Request):
     try:
@@ -62,7 +59,6 @@ async def generate_resume(req: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Cover Letter Generation (Final Robust Handler)
 @app.post("/generate-cover-letter")
 async def generate_cover_letter(req: Request):
     try:
@@ -101,7 +97,6 @@ async def generate_cover_letter(req: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ATS Match Checker (JSON input)
 @app.post("/ats-check")
 async def ats_check(request: ATSRequest):
     resume_words = set(request.resume_text.lower().split())
@@ -109,12 +104,18 @@ async def ats_check(request: ATSRequest):
     match = len(resume_words & job_words) / len(job_words)
     return {"ats_match_percentage": round(match * 100, 2)}
 
-# Debug Webhook Endpoint
 @app.post("/debug-webhook")
 async def debug_webhook(request: Request):
     headers = dict(request.headers)
     body = await request.body()
+    decoded_body = body.decode("utf-8", errors="replace")
+
+    log_entry = f"=== New Request ===\nHeaders: {headers}\nBody: {decoded_body}\n\n"
+
+    with open("/mnt/data/elementor_debug.log", "a") as f:
+        f.write(log_entry)
+
     return {
         "headers": headers,
-        "raw_body": body.decode("utf-8", errors="replace")
+        "raw_body": decoded_body
     }
