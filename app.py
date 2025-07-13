@@ -106,3 +106,13 @@ async def ats_check(request: ATSRequest):
     job_words = set(request.job_description.lower().split())
     match = len(resume_words & job_words) / len(job_words)
     return {"ats_match_percentage": round(match * 100, 2)}
+
+# Debug Webhook Endpoint
+@app.post("/debug-webhook")
+async def debug_webhook(request: Request):
+    headers = dict(request.headers)
+    body = await request.body()
+    return {
+        "headers": headers,
+        "raw_body": body.decode("utf-8", errors="replace")
+    }
