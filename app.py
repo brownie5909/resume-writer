@@ -23,10 +23,14 @@ class ATSRequest(BaseModel):
     resume_text: str
     job_description: str
 
-# Resume Generation (Manual JSON Parsing to support forms)
+# Resume Generation (Safe JSON/Form Handling)
 @app.post("/generate-resume")
 async def generate_resume(req: Request):
-    data = await req.json()
+    try:
+        data = await req.json()
+    except Exception:
+        form = await req.form()
+        data = form
 
     name = data.get("name")
     contact_info = data.get("contact_info")
@@ -55,10 +59,14 @@ async def generate_resume(req: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Cover Letter Generation (Manual JSON Parsing to support forms)
+# Cover Letter Generation (Safe JSON/Form Handling)
 @app.post("/generate-cover-letter")
 async def generate_cover_letter(req: Request):
-    data = await req.json()
+    try:
+        data = await req.json()
+    except Exception:
+        form = await req.form()
+        data = form
 
     name = data.get("name")
     contact_info = data.get("contact_info")
