@@ -1,12 +1,12 @@
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import openai
+from openai import OpenAI
 import os
 
 app = FastAPI()
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 class ResumeRequest(BaseModel):
     name: str
@@ -35,12 +35,12 @@ async def generate_resume(request: ResumeRequest):
     Make it ATS-friendly with action verbs and concise bullet points.
     '''
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4-turbo",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=800
         )
-        return {"resume": response['choices'][0]['message']['content']}
+        return {"resume": response.choices[0].message.content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -55,12 +55,12 @@ async def generate_cover_letter(request: CoverLetterRequest):
     Use a professional and confident tone.
     '''
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4-turbo",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=600
         )
-        return {"cover_letter": response['choices'][0]['message']['content']}
+        return {"cover_letter": response.choices[0].message.content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
