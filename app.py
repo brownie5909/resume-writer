@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
@@ -18,36 +18,26 @@ app.add_middleware(
 # OpenAI Client Initialization
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ATS Checker Request Model (JSON)
+# Request Models
+class ResumeRequest(BaseModel):
+    name: str
+    contact_info: str
+    work_history: str
+    job_description: str
+
 class ATSRequest(BaseModel):
     resume_text: str
     job_description: str
 
-# Resume Generation (Universal Input Handler)
+# Resume Generation (JSON Only)
 @app.post("/generate-resume")
-async def generate_resume(request: Request):
-    # Try JSON first
-    try:
-        data = await request.json()
-    except Exception:
-        # Fallback to form-data
-        form = await request.form()
-        data = form
-
-    name = data.get("name")
-    contact_info = data.get("contact_info")
-    work_history = data.get("work_history")
-    job_description = data.get("job_description")
-
-    if None in (name, contact_info, work_history, job_description):
-        raise HTTPException(status_code=400, detail="Missing required fields.")
-
+async def generate_resume(request: ResumeRequest):
     prompt = f'''
-    Create a professional resume for {name}.
-    Contact Info: {contact_info}
-    Work History: {work_history}
+    Create a professional resume for {request.name}.
+    Contact Info: {request.contact_info}
+    Work History: {request.work_history}
     Tailor the resume to the following job description:
-    {job_description}
+    {request.job_description}
     Make it ATS-friendly with action verbs and concise bullet points.
     '''
 
@@ -61,31 +51,15 @@ async def generate_resume(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Cover Letter Generation (Universal Input Handler)
+# Cover Letter Generation (JSON Only)
 @app.post("/generate-cover-letter")
-async def generate_cover_letter(request: Request):
-    # Try JSON first
-    try:
-        data = await request.json()
-    except Exception:
-        # Fallback to form-data
-        form = await request.form()
-        data = form
-
-    name = data.get("name")
-    contact_info = data.get("contact_info")
-    work_history = data.get("work_history")
-    job_description = data.get("job_description")
-
-    if None in (name, contact_info, work_history, job_description):
-        raise HTTPException(status_code=400, detail="Missing required fields.")
-
+async def generate_cover_letter(request: ResumeRequest):
     prompt = f'''
-    Write a cover letter for {name}.
-    Contact Info: {contact_info}
-    Work History: {work_history}
+    Write a cover letter for {request.name}.
+    Contact Info: {request.contact_info}
+    Work History: {request.work_history}
     Tailor it to the following job description:
-    {job_description}
+    {request.job_description}
     Use a professional and confident tone.
     '''
 
@@ -99,7 +73,7 @@ async def generate_cover_letter(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ATS Match Checker (JSON input, no change)
+# ATS Match Checker (JSON input)
 @app.post("/ats-check")
 async def ats_check(request: ATSRequest):
     resume_words = set(request.resume_text.lower().split())
