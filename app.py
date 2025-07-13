@@ -23,19 +23,16 @@ class ATSRequest(BaseModel):
     resume_text: str
     job_description: str
 
-# Resume Generation (Safe JSON/Form Handling with Empty Check)
+# Resume Generation (Robust JSON Handling)
 @app.post("/generate-resume")
 async def generate_resume(req: Request):
-    try:
-        data = await req.json()
-    except Exception:
-        form = await req.form()
-        data = form
+    data = await req.json()
+    data = {k.lower(): v for k, v in data.items()}
 
-    name = data.get("name", "").strip()
-    contact_info = data.get("contact_info", "").strip()
-    work_history = data.get("work_history", "").strip()
-    job_description = data.get("job_description", "").strip()
+    name = str(data.get("name", "")).strip()
+    contact_info = str(data.get("contact_info", "")).strip()
+    work_history = str(data.get("work_history", "")).strip()
+    job_description = str(data.get("job_description", "")).strip()
 
     if not all([name, contact_info, work_history, job_description]):
         raise HTTPException(status_code=400, detail="All fields are required.")
@@ -59,19 +56,16 @@ async def generate_resume(req: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Cover Letter Generation (Safe JSON/Form Handling with Empty Check)
+# Cover Letter Generation (Robust JSON Handling)
 @app.post("/generate-cover-letter")
 async def generate_cover_letter(req: Request):
-    try:
-        data = await req.json()
-    except Exception:
-        form = await req.form()
-        data = form
+    data = await req.json()
+    data = {k.lower(): v for k, v in data.items()}
 
-    name = data.get("name", "").strip()
-    contact_info = data.get("contact_info", "").strip()
-    work_history = data.get("work_history", "").strip()
-    job_description = data.get("job_description", "").strip()
+    name = str(data.get("name", "")).strip()
+    contact_info = str(data.get("contact_info", "")).strip()
+    work_history = str(data.get("work_history", "")).strip()
+    job_description = str(data.get("job_description", "")).strip()
 
     if not all([name, contact_info, work_history, job_description]):
         raise HTTPException(status_code=400, detail="All fields are required.")
