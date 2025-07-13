@@ -31,7 +31,11 @@ async def generate_resume(req: Request):
         data = {k.lower(): v for k, v in data.items()}
     except Exception:
         form = await req.form()
-        data = {k.lower(): v for k, v in form.items()}
+        data = {}
+        for k, v in form.items():
+            if k.endswith("[value]"):
+                field_name = k.split("[")[0].lower()
+                data[field_name] = v
 
     name = str(data.get("name", "")).strip()
     contact_info = str(data.get("contact_info", "")).strip()
@@ -69,7 +73,11 @@ async def generate_cover_letter(req: Request):
         data = {k.lower(): v for k, v in data.items()}
     except Exception:
         form = await req.form()
-        data = {k.lower(): v for k, v in form.items()}
+        data = {}
+        for k, v in form.items():
+            if k.endswith("[value]"):
+                field_name = k.split("[")[0].lower()
+                data[field_name] = v
 
     name = str(data.get("name", "")).strip()
     contact_info = str(data.get("contact_info", "")).strip()
