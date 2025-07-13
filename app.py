@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
+from fastapi.responses import FileResponse
 import os
 
 app = FastAPI()
@@ -121,3 +122,11 @@ async def debug_webhook(request: Request):
         "headers": headers,
         "raw_body": decoded_body
     }
+
+@app.get("/download-debug-log")
+async def download_debug_log():
+    log_path = "elementor_debug.log"
+    if os.path.exists(log_path):
+        return FileResponse(log_path, filename="elementor_debug.log")
+    else:
+        raise HTTPException(status_code=404, detail="Log file not found.")
