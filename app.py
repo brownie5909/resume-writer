@@ -1,23 +1,24 @@
-
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 import os
-from fastapi.middleware.cors import CORSMiddleware
 
+app = FastAPI()
+
+# Allow CORS for all origins (for testing). Replace "*" with your domain for production.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # You can replace * with your domain for security
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-app = FastAPI()
-
+# Initialize OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Request Models
 class ResumeRequest(BaseModel):
     name: str
     contact_info: str
@@ -34,6 +35,7 @@ class ATSRequest(BaseModel):
     resume_text: str
     job_description: str
 
+# Resume Endpoint
 @app.post("/generate-resume")
 async def generate_resume(request: ResumeRequest):
     prompt = f'''
@@ -54,6 +56,7 @@ async def generate_resume(request: ResumeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Cover Letter Endpoint
 @app.post("/generate-cover-letter")
 async def generate_cover_letter(request: CoverLetterRequest):
     prompt = f'''
@@ -74,6 +77,7 @@ async def generate_cover_letter(request: CoverLetterRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ATS Checker Endpoint
 @app.post("/ats-check")
 async def ats_check(request: ATSRequest):
     resume_words = set(request.resume_text.lower().split())
