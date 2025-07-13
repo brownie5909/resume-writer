@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
@@ -6,44 +6,37 @@ import os
 
 app = FastAPI()
 
-# Allow CORS for all origins (for testing). Replace "*" with your domain for production.
+# CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # For production, replace * with your domain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize OpenAI client
+# OpenAI Client Initialization
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Request Models
-class ResumeRequest(BaseModel):
-    name: str
-    contact_info: str
-    work_history: str
-    job_description: str
-
-class CoverLetterRequest(BaseModel):
-    name: str
-    contact_info: str
-    work_history: str
-    job_description: str
-
+# ATS Checker Request Model (JSON)
 class ATSRequest(BaseModel):
     resume_text: str
     job_description: str
 
-# Resume Endpoint
+# Resume Generation (Elementor compatible)
 @app.post("/generate-resume")
-async def generate_resume(request: ResumeRequest):
+async def generate_resume(
+    name: str = Form(...),
+    contact_info: str = Form(...),
+    work_history: str = Form(...),
+    job_description: str = Form(...)
+):
     prompt = f'''
-    Create a professional resume for {request.name}.
-    Contact Info: {request.contact_info}
-    Work History: {request.work_history}
+    Create a professional resume for {name}.
+    Contact Info: {contact_info}
+    Work History: {work_history}
     Tailor the resume to the following job description:
-    {request.job_description}
+    {job_description}
     Make it ATS-friendly with action verbs and concise bullet points.
     '''
     try:
@@ -56,15 +49,20 @@ async def generate_resume(request: ResumeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Cover Letter Endpoint
+# Cover Letter Generation (Elementor compatible)
 @app.post("/generate-cover-letter")
-async def generate_cover_letter(request: CoverLetterRequest):
+async def generate_cover_letter(
+    name: str = Form(...),
+    contact_info: str = Form(...),
+    work_history: str = Form(...),
+    job_description: str = Form(...)
+):
     prompt = f'''
-    Write a cover letter for {request.name}.
-    Contact Info: {request.contact_info}
-    Work History: {request.work_history}
+    Write a cover letter for {name}.
+    Contact Info: {contact_info}
+    Work History: {work_history}
     Tailor it to the following job description:
-    {request.job_description}
+    {job_description}
     Use a professional and confident tone.
     '''
     try:
@@ -77,7 +75,7 @@ async def generate_cover_letter(request: CoverLetterRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ATS Checker Endpoint
+# ATS Match Checker (JSON input, no change)
 @app.post("/ats-check")
 async def ats_check(request: ATSRequest):
     resume_words = set(request.resume_text.lower().split())
