@@ -36,6 +36,9 @@ async def generate_resume(req: Request):
             if k.endswith("[value]"):
                 field_name = k.split("[")[0].lower()
                 data[field_name] = v
+            else:
+                # Support direct field names too
+                data[k.lower()] = v
 
     name = str(data.get("name", "")).strip()
     contact_info = str(data.get("contact_info", "")).strip()
@@ -90,6 +93,8 @@ async def generate_cover_letter(req: Request):
             if k.endswith("[value]"):
                 field_name = k.split("[")[0].lower()
                 data[field_name] = v
+            else:
+                data[k.lower()] = v
 
     name = str(data.get("name", "")).strip()
     contact_info = str(data.get("contact_info", "")).strip()
