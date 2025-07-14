@@ -33,12 +33,7 @@ async def generate_resume(req: Request):
         form = await req.form()
         data = {}
         for k, v in form.items():
-            if k.endswith("[value]"):
-                field_name = k.split("[")[0].lower()
-                data[field_name] = v
-            else:
-                # Support direct field names too
-                data[k.lower()] = v
+            data[k.lower()] = v
 
     name = str(data.get("name", "")).strip()
     contact_info = str(data.get("contact_info", "")).strip()
@@ -53,8 +48,9 @@ async def generate_resume(req: Request):
 
     if missing:
         return {
-            "success": False,
-            "error": f"Missing fields: {', '.join(missing)}"
+            "data": {
+                "error": f"Missing fields: {', '.join(missing)}"
+            }
         }
 
     prompt = f'''
@@ -72,12 +68,11 @@ async def generate_resume(req: Request):
             messages=[{"role": "user", "content": prompt}],
             max_tokens=800
         )
-    return {
-        "data": {
-            "resume": response.choices[0].message.content
+        return {
+            "data": {
+                "resume": response.choices[0].message.content
+            }
         }
-    }
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -92,11 +87,7 @@ async def generate_cover_letter(req: Request):
         form = await req.form()
         data = {}
         for k, v in form.items():
-            if k.endswith("[value]"):
-                field_name = k.split("[")[0].lower()
-                data[field_name] = v
-            else:
-                data[k.lower()] = v
+            data[k.lower()] = v
 
     name = str(data.get("name", "")).strip()
     contact_info = str(data.get("contact_info", "")).strip()
@@ -121,7 +112,7 @@ async def generate_cover_letter(req: Request):
             messages=[{"role": "user", "content": prompt}],
             max_tokens=600
         )
-        return {"cover_letter": response.choices[0].message.content}
+        return {"data": {"cover_letter": response.choices[0].message.content}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -130,7 +121,7 @@ async def ats_check(request: ATSRequest):
     resume_words = set(request.resume_text.lower().split())
     job_words = set(request.job_description.lower().split())
     match = len(resume_words & job_words) / len(job_words)
-    return {"ats_match_percentage": round(match * 100, 2)}
+    return {"data": {"ats_match_percentage": round(match * 100, 2)}}
 
 @app.post("/debug-webhook")
 async def debug_webhook(request: Request):
