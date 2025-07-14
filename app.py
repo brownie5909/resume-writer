@@ -22,7 +22,7 @@ class ATSRequest(BaseModel):
     resume_text: str
     job_description: str
 
-# Serve a styled test HTML page for quick debugging
+# Serve a styled test HTML page for quick debugging with Bootstrap
 @app.get("/", response_class=HTMLResponse)
 async def index():
     html_content = """
@@ -32,47 +32,44 @@ async def index():
       <meta charset='utf-8'>
       <meta name='viewport' content='width=device-width, initial-scale=1'>
       <title>Resume Builder Test</title>
+      <!-- Bootstrap CSS -->
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.1/css/bootstrap.min.css" integrity="sha512-T584y5Q7jL+z9OYnN5aXsX5G3PVZ4ab7RR6KIDe3G0lI+HXc1iXkEHc1h8s6bJdN9u1em7B7XhKpU9Wcu6F5nQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
       <style>
-        body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 0; }
-        .container { max-width: 700px; margin: 40px auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #333; }
-        form { display: grid; grid-gap: 15px; }
-        label { font-weight: bold; color: #555; }
-        input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
-        button { padding: 12px 20px; background: #0073e6; color: #fff; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
-        button:hover { background: #005bb5; }
-        pre#output { background: #272822; color: #f8f8f2; padding: 15px; border-radius: 4px; overflow-x: auto; }
+        body { background: #f8f9fa; }
+        pre#output { background: #343a40; color: #f8f9fa; padding: 15px; border-radius: 4px; max-height: 400px; overflow-y: auto; }
       </style>
     </head>
     <body>
-      <div class="container">
-        <h1>AI Resume Builder Test</h1>
+      <div class="container mt-5 mb-5">
+        <h1 class="text-center mb-4">AI Resume Builder Test</h1>
         <form id="testForm">
-          <div>
-            <label for="name">Full Name</label><br>
-            <input id="name" name="name" placeholder="John Doe" value="John Doe" required>
+          <div class="form-group">
+            <label for="name">Full Name</label>
+            <input id="name" name="name" class="form-control" placeholder="John Doe" value="John Doe" required>
           </div>
-          <div>
-            <label for="contact_info">Email</label><br>
-            <input id="contact_info" name="contact_info" placeholder="john@example.com" value="john@example.com" required>
+          <div class="form-group">
+            <label for="contact_info">Email</label>
+            <input id="contact_info" name="contact_info" type="email" class="form-control" placeholder="john@example.com" value="john@example.com" required>
           </div>
-          <div>
-            <label for="work_history">Work History</label><br>
-            <textarea id="work_history" name="work_history" rows="4" required>Worked at XYZ for 5 years.</textarea>
+          <div class="form-group">
+            <label for="work_history">Work History</label>
+            <textarea id="work_history" name="work_history" class="form-control" rows="4" required>Worked at XYZ for 5 years.</textarea>
           </div>
-          <div>
-            <label for="job_description">Job Description</label><br>
-            <textarea id="job_description" name="job_description" rows="4" required>Sales role requiring leadership.</textarea>
+          <div class="form-group">
+            <label for="job_description">Job Description</label>
+            <textarea id="job_description" name="job_description" class="form-control" rows="4" required>Sales role requiring leadership.</textarea>
           </div>
-          <div style="text-align:center;">
-            <button type="submit">Generate Resume</button>
+          <div class="text-center">
+            <button type="submit" class="btn btn-primary px-5">Generate Resume</button>
           </div>
         </form>
 
-        <h2>Generated Resume</h2>
+        <h2 class="mt-5">Generated Resume</h2>
         <pre id="output">Submit the form to generate your resume...</pre>
       </div>
 
+      <!-- Optional JavaScript -->
+      <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha256-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38E0=" crossorigin="anonymous"></script>
       <script>
         document.getElementById('testForm').addEventListener('submit', function(e){
           e.preventDefault();
