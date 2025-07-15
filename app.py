@@ -10,10 +10,10 @@ app = FastAPI()
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],       # allow any origin
+    allow_credentials=False,   # disable credentials so wildcard origin works
+    allow_methods=["*"],       # allow all methods
+    allow_headers=["*"],       # allow all headers
 )
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
