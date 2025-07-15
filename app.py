@@ -118,6 +118,17 @@ async def generate_resume(req: Request):
         for k, v in form.items():
             data[k.lower()] = v
 
+        # ─── START FLATTEN PATCH ───────────────────────────────────────────────────
+    # Elementor nests inputs as form_fields[name]=…; we grab those here
+    flattened = {}
+    for key, val in data.items():
+        if key.startswith("form_fields[") and key.endswith("]"):
+            inner = key[len("form_fields["):-1]   # extract name inside brackets
+            flattened[inner.lower()] = val
+    if flattened:
+        data = flattened
+    # ─── END FLATTEN PATCH ─────────────────────────────────────────────────────
+
     name = str(data.get("name", "")).strip()
     contact_info = str(data.get("contact_info", "")).strip()
     work_history = str(data.get("work_history", "")).strip()
