@@ -106,8 +106,8 @@ async def submit_resume(request: Request):
     html_resume = generate_html_resume(data, resume_text)
     pdf_path = generate_pdf(html_resume)
 
-    # Generate unique ID and save data to tmp file
-    resume_id = str(uuid.uuid4())
+    # Use provided resume_id or generate a new one
+    resume_id = data.get('resume_id', str(uuid.uuid4()))
     cache_data = {
         "message": "Resume generated successfully.",
         "download_link": f"/download_pdf/{os.path.basename(pdf_path)}",
