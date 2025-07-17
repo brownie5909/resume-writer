@@ -29,18 +29,18 @@ def generate_resume_text(data):
     prompt = f"""
 Generate a professional resume based on the following details:
 
-Full Name: {data['full_name']}
-Email: {data['email']}
-Phone: {data['phone']}
-Job Title: {data['job_title']}
-Company: {data['company']}
-Years Worked: {data['years_worked']}
-Responsibilities: {data['responsibilities']}
-Degree: {data['degree']}
-School: {data['school']}
-Skills: {data['skills']}
-Summary: {data['summary']}
-Template Style: {data['template_choice']}
+Full Name: {data.get('full_name', 'N/A')}
+Email: {data.get('email', 'N/A')}
+Phone: {data.get('phone', 'N/A')}
+Job Title: {data.get('job_title', 'N/A')}
+Company: {data.get('company', 'N/A')}
+Years Worked: {data.get('years_worked', 'N/A')}
+Responsibilities: {data.get('responsibilities', 'N/A')}
+Degree: {data.get('degree', 'N/A')}
+School: {data.get('school', 'N/A')}
+Skills: {data.get('skills', 'N/A')}
+Summary: {data.get('summary', 'N/A')}
+Template Style: {data.get('template_choice', 'conservative')}
 
 Format it in professional resume tone.
 """
@@ -66,10 +66,10 @@ def generate_html_resume(data, resume_text):
     </style>
     </head>
     <body>
-        <h1>{data['full_name']}</h1>
+        <h1>{data.get('full_name', 'N/A')}</h1>
         <div class="section">
-            <strong>Email:</strong> {data['email']}<br>
-            <strong>Phone:</strong> {data['phone']}
+            <strong>Email:</strong> {data.get('email', 'N/A')}<br>
+            <strong>Phone:</strong> {data.get('phone', 'N/A')}
         </div>
         <div class="section">
             <pre>{resume_text}</pre>
@@ -108,7 +108,7 @@ async def submit_resume(request: Request):
     result_url = (
         "https://hireready-3a5b8.ingress-erytho.ewp.live/results"
         f"?file={urllib.parse.quote(os.path.basename(pdf_path))}"
-        f"&type={urllib.parse.quote(data['template_choice'])}"
+        f"&type={urllib.parse.quote(data.get('template_choice', 'conservative'))}"
         f"&html={encoded_html}"
     )
 
