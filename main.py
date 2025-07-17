@@ -5,6 +5,7 @@ from weasyprint import HTML
 import openai
 import tempfile
 import os
+import json
 
 from openai import OpenAI
 
@@ -89,11 +90,16 @@ def parse_elementor_fields(fields):
 # API endpoint to receive resume data and return JSON response
 @app.post("/submit_resume")
 async def submit_resume(request: Request):
-    data = await request.json()
+    content_type = request.headers.get('content-type', '')
 
-    # Handle Elementor webhook format
-    if 'fields' in data:
-        data = parse_elementor_fields(data['fields'])
+    if 'application/json' in content_type:
+        data = await request.json()
+    else:
+        form = await request.form()
+        data = {}
+        if 'fields' in form:
+            fields = json.loads(form['fields'])
+            data = parse_elementor_fields(fields)
 
     resume_text = generate_resume_text(data)
     html_resume = generate_html_resume(data, resume_text)
