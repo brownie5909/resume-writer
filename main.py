@@ -5,10 +5,12 @@ import openai
 import tempfile
 import os
 
+from openai import OpenAI
+
 app = FastAPI()
 
 # Read OpenAI API Key from environment variable
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Function to generate resume text using GPT
 def generate_resume_text(data):
@@ -31,13 +33,13 @@ Template Style: {data['template_choice']}
 Format it in professional resume tone.
 """
 
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=700
     )
 
-    return response['choices'][0]['message']['content']
+    return response.choices[0].message.content
 
 # Function to generate PDF using WeasyPrint
 def generate_pdf(content):
