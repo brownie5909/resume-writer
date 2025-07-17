@@ -13,7 +13,7 @@ app = FastAPI()
 # Setup CORS to allow frontend origin
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace '*' with ['https://hireready-3a5b8.ingress-erytho.ewp.live'] for production security
+    allow_origins=["https://hireready-3a5b8.ingress-erytho.ewp.live"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
