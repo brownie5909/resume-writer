@@ -1,18 +1,16 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from weasyprint import HTML
 import openai
 import tempfile
 import os
-import base64
-import urllib.parse
 
 from openai import OpenAI
 
 app = FastAPI()
 
-# Setup CORS to allow frontend origin (optional here since we're redirecting)
+# Setup CORS to allow frontend origin
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://hireready-3a5b8.ingress-erytho.ewp.live"],
@@ -88,7 +86,7 @@ def generate_pdf(content):
 def parse_elementor_fields(fields):
     return {item['id']: item['value'] for item in fields}
 
-# API endpoint to receive resume data and redirect to results page
+# API endpoint to receive resume data and return JSON response
 @app.post("/submit_resume")
 async def submit_resume(request: Request):
     data = await request.json()
@@ -101,18 +99,12 @@ async def submit_resume(request: Request):
     html_resume = generate_html_resume(data, resume_text)
     pdf_path = generate_pdf(html_resume)
 
-    # Encode HTML resume in base64 to avoid URL issues
-    encoded_html = base64.urlsafe_b64encode(html_resume.encode()).decode()
-
-    # Build redirect URL
-    result_url = (
-        "https://hireready-3a5b8.ingress-erytho.ewp.live/results"
-        f"?file={urllib.parse.quote(os.path.basename(pdf_path))}"
-        f"&type={urllib.parse.quote(data.get('template_choice', 'conservative'))}"
-        f"&html={encoded_html}"
-    )
-
-    return RedirectResponse(url=result_url)
+    return JSONResponse({
+        "message": "Resume generated successfully.",
+        "download_link": f"/download_pdf/{os.path.basename(pdf_path)}",
+        "html_resume": html_resume,
+        "template_choice": data.get('template_choice', 'conservative')
+    })
 
 # API endpoint to download generated PDF
 @app.get("/download_pdf/{filename}")
