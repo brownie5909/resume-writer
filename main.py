@@ -45,10 +45,19 @@ def generate_pdf(content):
         HTML(string=content).write_pdf(tmp.name)
         return tmp.name
 
+# Function to parse Elementor webhook format
+def parse_elementor_fields(fields):
+    return {item['id']: item['value'] for item in fields}
+
 # API endpoint to receive resume data and generate PDF
 @app.post("/submit_resume")
 async def submit_resume(request: Request):
     data = await request.json()
+
+    # Handle Elementor webhook format
+    if 'fields' in data:
+        data = parse_elementor_fields(data['fields'])
+
     resume_text = generate_resume_text(data)
     html_content = f"<h1>{data['full_name']}</h1><pre>{resume_text}</pre>"
     pdf_path = generate_pdf(html_content)
