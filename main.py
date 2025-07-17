@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from weasyprint import HTML
 import openai
 import tempfile
@@ -8,6 +9,15 @@ import os
 from openai import OpenAI
 
 app = FastAPI()
+
+# Setup CORS to allow frontend origin
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Replace '*' with ['https://hireready-3a5b8.ingress-erytho.ewp.live'] for production security
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Read OpenAI API Key from environment variable
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -89,7 +99,6 @@ async def submit_resume(request: Request):
     html_resume = generate_html_resume(data, resume_text)
     pdf_path = generate_pdf(html_resume)
 
-    # Optionally render the HTML on the page and allow user to choose template again later
     return JSONResponse({
         "message": "Resume generated successfully.",
         "html_resume": html_resume,
