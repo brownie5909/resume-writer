@@ -6,6 +6,7 @@ import openai
 import tempfile
 import os
 import json
+import uuid
 
 from openai import OpenAI
 
@@ -87,7 +88,7 @@ def generate_pdf(content):
 def parse_elementor_fields(fields):
     return {item['id']: item['value'] for item in fields}
 
-# API endpoint to receive resume data and return JSON response
+# API endpoint to receive resume data and return 200 OK with cache
 @app.post("/submit_resume")
 async def submit_resume(request: Request):
     content_type = request.headers.get('content-type', '')
@@ -105,12 +106,30 @@ async def submit_resume(request: Request):
     html_resume = generate_html_resume(data, resume_text)
     pdf_path = generate_pdf(html_resume)
 
-    return JSONResponse({
+    # Generate unique ID and save data to tmp file
+    resume_id = str(uuid.uuid4())
+    cache_data = {
         "message": "Resume generated successfully.",
         "download_link": f"/download_pdf/{os.path.basename(pdf_path)}",
         "html_resume": html_resume,
         "template_choice": data.get('template_choice', 'conservative')
-    })
+    }
+    with open(f"/tmp/{resume_id}.json", "w") as f:
+        json.dump(cache_data, f)
+
+    # Return empty response for Elementor webhook compatibility
+    return JSONResponse({}, status_code=200)
+
+# API endpoint to get resume data by ID
+@app.get("/get_resume/{resume_id}")
+async def get_resume(resume_id: str):
+    file_path = f"/tmp/{resume_id}.json"
+    if os.path.exists(file_path):
+        with open(file_path, "r") as f:
+            data = json.load(f)
+        return JSONResponse(data)
+    else:
+        return JSONResponse({"error": "Resume not found."}, status_code=404)
 
 # API endpoint to download generated PDF
 @app.get("/download_pdf/{filename}")
