@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, FileResponse
 from weasyprint import HTML
@@ -8,8 +7,10 @@ import os
 
 app = FastAPI()
 
+# Read OpenAI API Key from environment variable
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# Function to generate resume text using GPT
 def generate_resume_text(data):
     prompt = f"""
 Generate a professional resume based on the following details:
@@ -38,11 +39,13 @@ Format it in professional resume tone.
 
     return response['choices'][0]['message']['content']
 
+# Function to generate PDF using WeasyPrint
 def generate_pdf(content):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf", dir="/tmp") as tmp:
         HTML(string=content).write_pdf(tmp.name)
         return tmp.name
 
+# API endpoint to receive resume data and generate PDF
 @app.post("/submit_resume")
 async def submit_resume(request: Request):
     data = await request.json()
@@ -55,6 +58,7 @@ async def submit_resume(request: Request):
         "download_link": f"/download_pdf/{os.path.basename(pdf_path)}"
     })
 
+# API endpoint to download generated PDF
 @app.get("/download_pdf/{filename}")
 async def download_pdf(filename: str):
     file_path = f"/tmp/{filename}"
