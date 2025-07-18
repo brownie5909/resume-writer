@@ -88,7 +88,7 @@ def generate_pdf(content):
 def parse_elementor_fields(fields):
     return {item['id']: item['value'] for item in fields}
 
-# API endpoint to receive resume data and return redirect JSON
+# API endpoint to receive resume data and return success
 @app.post("/submit_resume")
 async def submit_resume(request: Request):
     content_type = request.headers.get('content-type', '')
@@ -117,10 +117,8 @@ async def submit_resume(request: Request):
     with open(f"/tmp/{resume_id}.json", "w") as f:
         json.dump(cache_data, f)
 
-    # Return redirect response for Elementor webhook
-    return JSONResponse({
-        "redirect_url": f"https://hireready-3a5b8.ingress-erytho.ewp.live/results?resume_id={resume_id}"
-    }, status_code=200)
+    # Return success only (Elementor will handle redirect via JS)
+    return JSONResponse({"success": True}, status_code=200)
 
 # API endpoint to get resume data by ID
 @app.get("/get_resume/{resume_id}")
