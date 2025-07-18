@@ -147,7 +147,13 @@ async def submit_resume(request: Request):
     with open(cache_file, "w") as f:
         json.dump(cache_data, f)
 
-    return JSONResponse({"html_resume": html_resume}, status_code=200)
+    return JSONResponse({
+        "success": True,
+        "data": {
+            "message": "Resume generated successfully.",
+            "html_resume": html_resume
+        }
+    }, status_code=200)
 
 # API endpoint to download generated PDF
 @app.get("/download_pdf/{filename}")
