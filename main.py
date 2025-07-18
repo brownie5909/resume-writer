@@ -91,20 +91,30 @@ def parse_elementor_fields(fields):
 # API endpoint to receive resume data and return success
 @app.post("/submit_resume")
 async def submit_resume(request: Request):
-    content_type = request.headers.get('content-type', '')
+    print("Received request at /submit_resume")
+        content_type = request.headers.get('content-type', '')
+    print(f"Content-Type: {content_type}")
 
-    if 'application/json' in content_type:
-        data = await request.json()
+        if 'application/json' in content_type:
+                data = await request.json()
+        print(f"Received JSON data: {json.dumps(data, indent=2)}")
     else:
-        form = await request.form()
+                form = await request.form()
+        print(f"Received form data: {form}")
         data = {}
         if 'fields' in form:
-            fields = json.loads(form['fields'])
-            data = parse_elementor_fields(fields)
+                        fields = json.loads(form['fields'])
+            print(f"Parsed fields: {json.dumps(fields, indent=2)}")
+                        data = parse_elementor_fields(fields)
+            print(f"Parsed data: {json.dumps(data, indent=2)}")
 
+        print("Generating resume text...")
     resume_text = generate_resume_text(data)
-    html_resume = generate_html_resume(data, resume_text)
-    pdf_path = generate_pdf(html_resume)
+    print("Resume text generated.")
+        html_resume = generate_html_resume(data, resume_text)
+    print("HTML resume generated.")
+        pdf_path = generate_pdf(html_resume)
+    print(f"PDF generated at: {pdf_path}")
 
     # Use provided resume_id or generate a new one
     resume_id = data.get('resume_id', str(uuid.uuid4()))
@@ -114,7 +124,9 @@ async def submit_resume(request: Request):
         "html_resume": html_resume,
         "template_choice": data.get('template_choice', 'conservative')
     }
-    with open(f"/tmp/{resume_id}.json", "w") as f:
+        cache_file = f"/tmp/{resume_id}.json"
+    print(f"Saving cache data to {cache_file}")
+    with open(cache_file, "w") as f:
         json.dump(cache_data, f)
 
     # Return success only (Elementor will handle redirect via JS)
