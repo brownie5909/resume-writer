@@ -155,7 +155,6 @@ async def submit_resume(request: Request):
         }
     }, status_code=200)
 
-
 # API endpoint to download generated PDF
 
 @app.get("/download_pdf/{filename}")
