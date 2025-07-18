@@ -134,11 +134,12 @@ async def submit_resume(request: Request):
     with open(cache_file, "w") as f:
         json.dump(cache_data, f)
 
-    # Return success with message (Elementor expects this)
+    # Return success with redirect (Elementor will handle the redirect automatically)
     return JSONResponse({
         "success": True,
         "data": {
-            "message": "Resume generated successfully."
+            "message": "Resume generated successfully.",
+            "redirect_url": f"https://hireready-3a5b8.ingress-erytho.ewp.live/results?resume_id={resume_id}"
         }
     }, status_code=200)
 
