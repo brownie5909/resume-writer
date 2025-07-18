@@ -129,7 +129,10 @@ async def submit_resume(request: Request):
     print(f"PDF generated at: {pdf_path}")
 
     # Use provided resume_id or generate a new one
-    resume_id = data.get('resume_id', str(uuid.uuid4()))
+    resume_id = data.get('resume_id')
+    if not resume_id or resume_id.strip() == "":
+        resume_id = str(uuid.uuid4())
+
     cache_data = {
         "message": "Resume generated successfully.",
         "download_link": f"/download_pdf/{os.path.basename(pdf_path)}",
