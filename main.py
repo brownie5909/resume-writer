@@ -63,6 +63,7 @@ def generate_html_resume(data, resume_text):
         h1 {{ font-size: 24px; margin-bottom: 10px; }}
         .section {{ margin-bottom: 20px; }}
         pre {{ white-space: pre-wrap; word-wrap: break-word; }}
+        .buttons {{ margin-top: 20px; }}
     </style>
     </head>
     <body>
@@ -74,6 +75,16 @@ def generate_html_resume(data, resume_text):
         <div class="section">
             <pre>{resume_text}</pre>
         </div>
+        <div class="buttons">
+            <a href="/download_pdf/{data.get('resume_id', 'temp.pdf')}" target="_blank">Download PDF</a>
+            <button onclick="changeStyle('conservative')">Conservative</button>
+            <button onclick="changeStyle('modern')">Modern</button>
+        </div>
+        <script>
+            function changeStyle(style) {
+                alert('Style change requested: ' + style + '. Submit the form again to regenerate.');
+            }
+        </script>
     </body>
     </html>
     """
@@ -88,7 +99,7 @@ def generate_pdf(content):
 def parse_elementor_fields(fields):
     return {item['id']: item['value'] for item in fields}
 
-# API endpoint to receive resume data and return success
+# API endpoint to receive resume data and return HTML directly
 @app.post("/submit_resume")
 async def submit_resume(request: Request):
     print("Received request at /submit_resume")
@@ -109,7 +120,6 @@ async def submit_resume(request: Request):
             data = parse_elementor_fields(fields)
             print(f"Parsed data: {json.dumps(data, indent=2)}")
         else:
-            # Fallback for flat Elementor data
             for key in form.keys():
                 value = form.get(key)
                 normalized_key = key.lower().replace(" ", "_").replace("&", "and").replace("__", "_")
@@ -120,20 +130,21 @@ async def submit_resume(request: Request):
     resume_text = generate_resume_text(data)
     print("Resume text generated.")
 
+    resume_id = data.get('resume_id')
+    if not resume_id or resume_id.strip() == "":
+        resume_id = str(uuid.uuid4())
+    data['resume_id'] = resume_id
+
     html_resume = generate_html_resume(data, resume_text)
     print("HTML resume generated.")
 
     pdf_path = generate_pdf(html_resume)
     print(f"PDF generated at: {pdf_path}")
 
-    # Use provided resume_id or generate a new one
-    resume_id = data.get('resume_id')
-    if not resume_id or resume_id.strip() == "":
-        resume_id = str(uuid.uuid4())
+    # Save cache
     cache_data = {
-        "message": "Resume generated successfully.",
-        "download_link": f"/download_pdf/{os.path.basename(pdf_path)}",
         "html_resume": html_resume,
+        "download_link": f"/download_pdf/{os.path.basename(pdf_path)}",
         "template_choice": data.get('template_choice', 'conservative')
     }
     cache_file = f"/tmp/{resume_id}.json"
@@ -141,22 +152,7 @@ async def submit_resume(request: Request):
     with open(cache_file, "w") as f:
         json.dump(cache_data, f)
 
-    # Return success with redirect (Elementor will handle the redirect automatically)
-    return JSONResponse({
-        "message": "Resume generated successfully.",
-        "redirect_url": f"https://hireready-3a5b8.ingress-erytho.ewp.live/results?resume_id={resume_id}"
-    }, status_code=200)
-
-# API endpoint to get resume data by ID
-@app.get("/get_resume/{resume_id}")
-async def get_resume(resume_id: str):
-    file_path = f"/tmp/{resume_id}.json"
-    if os.path.exists(file_path):
-        with open(file_path, "r") as f:
-            data = json.load(f)
-        return JSONResponse(data)
-    else:
-        return JSONResponse({"error": "Resume not found."}, status_code=404)
+    return JSONResponse({"html_resume": html_resume}, status_code=200)
 
 # API endpoint to download generated PDF
 @app.get("/download_pdf/{filename}")
