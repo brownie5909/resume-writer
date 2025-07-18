@@ -151,11 +151,10 @@ async def submit_resume(request: Request):
         "success": True,
         "data": {
             "message": "Resume generated successfully.",
-            "fields": {
-                "resume_output": html_resume
-            }
+            "resume_output": html_resume
         }
     }, status_code=200)
+
 
 # API endpoint to download generated PDF
 
