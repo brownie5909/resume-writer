@@ -151,7 +151,9 @@ async def submit_resume(request: Request):
         "success": True,
         "data": {
             "message": "Resume generated successfully.",
-            "html_resume": html_resume
+            "fields": {
+                "resume_output": html_resume
+            }
         }
     }, status_code=200)
 
