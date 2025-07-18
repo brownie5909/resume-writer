@@ -108,6 +108,13 @@ async def submit_resume(request: Request):
             print(f"Parsed fields: {json.dumps(fields, indent=2)}")
             data = parse_elementor_fields(fields)
             print(f"Parsed data: {json.dumps(data, indent=2)}")
+        else:
+            # Fallback for flat Elementor data
+            for key in form.keys():
+                value = form.get(key)
+                normalized_key = key.lower().replace(" ", "_").replace("&", "and").replace("__", "_")
+                data[normalized_key] = value
+            print(f"Parsed flat form data: {json.dumps(data, indent=2)}")
 
     print("Generating resume text...")
     resume_text = generate_resume_text(data)
