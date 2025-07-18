@@ -100,9 +100,9 @@ async def submit_resume(request: Request):
         data = await request.json()
         print(f"Received JSON data: {json.dumps(data, indent=2)}")
     else:
-    form = await request.form()
-    print(f"Received form data: {form}")
-    data = {}
+        form = await request.form()
+        print(f"Received form data: {form}")
+        data = {}
     if 'fields' in form:
         fields = json.loads(form['fields'])
         print(f"Parsed fields: {json.dumps(fields, indent=2)}")
