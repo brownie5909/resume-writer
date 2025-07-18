@@ -144,6 +144,7 @@ async def submit_resume(request: Request):
     # Return success with redirect (Elementor will handle the redirect automatically)
     return JSONResponse({
         "success": True,
+        "status": True,
         "data": {
             "message": "Resume generated successfully.",
             "redirect_url": f"https://hireready-3a5b8.ingress-erytho.ewp.live/results?resume_id={resume_id}"
