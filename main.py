@@ -105,9 +105,7 @@ async def submit_resume(request: Request):
         form = await request.form()
         print(f"Received form data: {form}")
         for key, value in form.items():
-            if key.startswith("fields[") and key.endswith("[value]"):
-                field_id = key.split("[")[1].split("]")[0]
-                data[field_id] = value
+            data[key] = value
         print(f"Parsed data: {json.dumps(data, indent=2)}")
 
     print("Generating resume text...")
@@ -134,7 +132,7 @@ async def submit_resume(request: Request):
     with open(cache_file, "w") as f:
         json.dump(cache_data, f)
 
-    # Return EXACTLY what Elementor expects
+    # Return what Elementor expects when Advanced Data is OFF
     return JSONResponse({
         "success": True,
         "data": {
