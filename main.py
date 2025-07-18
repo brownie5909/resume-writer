@@ -118,9 +118,12 @@ async def submit_resume(request: Request):
         json.dump(cache_data, f)
 
     # Return success only (Elementor will handle redirect via JS)
-    from starlette.responses import Response
-
-    return Response(status_code=200)
+    return JSONResponse({
+        "success": True,
+        "data": {
+            "message": "Resume generated successfully."
+        }
+    }, status_code=200)
 
 # API endpoint to get resume data by ID
 @app.get("/get_resume/{resume_id}")
