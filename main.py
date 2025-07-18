@@ -87,11 +87,6 @@ def generate_pdf(content):
         HTML(string=content).write_pdf(tmp.name)
         return tmp.name
 
-# Function to parse Elementor webhook format
-
-def parse_elementor_fields(fields):
-    return {item['id']: item['value'] for item in fields}
-
 # API endpoint to receive resume data and return HTML directly
 
 @app.post("/submit_resume")
@@ -101,32 +96,25 @@ async def submit_resume(request: Request):
     content_type = request.headers.get('content-type', '')
     print(f"Content-Type: {content_type}")
 
+    data = {}
+
     if 'application/json' in content_type:
         data = await request.json()
         print(f"Received JSON data: {json.dumps(data, indent=2)}")
     else:
         form = await request.form()
         print(f"Received form data: {form}")
-        data = {}
-        if 'fields' in form:
-            fields = json.loads(form['fields'])
-            print(f"Parsed fields: {json.dumps(fields, indent=2)}")
-            data = parse_elementor_fields(fields)
-            print(f"Parsed data: {json.dumps(data, indent=2)}")
-        else:
-            for key in form.keys():
-                value = form.get(key)
-                normalized_key = key.lower().replace(" ", "_").replace("&", "and").replace("__", "_")
-                data[normalized_key] = value
-            print(f"Parsed flat form data: {json.dumps(data, indent=2)}")
+        for key, value in form.items():
+            if key.startswith("fields[") and key.endswith("[value]"):
+                field_id = key.split("[")[1].split("]")[0]
+                data[field_id] = value
+        print(f"Parsed data: {json.dumps(data, indent=2)}")
 
     print("Generating resume text...")
     resume_text = generate_resume_text(data)
     print("Resume text generated.")
 
-    resume_id = data.get('resume_id')
-    if not resume_id or resume_id.strip() == "":
-        resume_id = str(uuid.uuid4())
+    resume_id = str(uuid.uuid4())
     data['resume_id'] = resume_id
 
     html_resume = generate_html_resume(data, resume_text)
