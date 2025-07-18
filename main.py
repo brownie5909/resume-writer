@@ -77,14 +77,9 @@ def generate_html_resume(data, resume_text):
         </div>
         <div class="buttons">
             <a href="/download_pdf/{data.get('resume_id', 'temp.pdf')}" target="_blank">Download PDF</a>
-            <button onclick="changeStyle('conservative')">Conservative</button>
-            <button onclick="changeStyle('modern')">Modern</button>
+            <button onclick=\"alert('Style change requested: conservative. Submit the form again to regenerate.')\">Conservative</button>
+            <button onclick=\"alert('Style change requested: modern. Submit the form again to regenerate.')\">Modern</button>
         </div>
-        <script>
-            function changeStyle(style) {
-                alert('Style change requested: ' + style + '. Submit the form again to regenerate.');
-            }
-        </script>
     </body>
     </html>
     """
