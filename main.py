@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from weasyprint import HTML
 import openai
@@ -87,7 +87,7 @@ def generate_pdf(content):
         HTML(string=content).write_pdf(tmp.name)
         return tmp.name
 
-# API endpoint to receive resume data and return HTML directly
+# API endpoint to receive resume data and return only resume_id
 
 @app.post("/submit_resume")
 async def submit_resume(request: Request):
@@ -132,10 +132,10 @@ async def submit_resume(request: Request):
     with open(cache_file, "w") as f:
         json.dump(cache_data, f)
 
-    # Return the exact structure Elementor expects when Advanced Data is ON
+    # Return only resume_id
     return JSONResponse({
         "fields": {
-            "resume_output": html_resume
+            "resume_id": resume_id
         }
     }, status_code=200)
 
@@ -145,3 +145,17 @@ async def submit_resume(request: Request):
 async def download_pdf(filename: str):
     file_path = f"/tmp/{filename}"
     return FileResponse(file_path, media_type='application/pdf', filename=filename)
+
+# API endpoint to get saved HTML resume by resume_id
+
+@app.get("/get_resume_html/{resume_id}")
+async def get_resume_html(resume_id: str):
+    cache_file = f"/tmp/{resume_id}.json"
+    if not os.path.exists(cache_file):
+        return JSONResponse({"error": "Resume not found"}, status_code=404)
+
+    with open(cache_file, "r") as f:
+        cache_data = json.load(f)
+
+    html_resume = cache_data.get("html_resume", "")
+    return HTMLResponse(content=html_resume, status_code=200)
