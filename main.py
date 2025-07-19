@@ -1,5 +1,5 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from weasyprint import HTML
 import openai
@@ -97,16 +97,13 @@ async def submit_resume(request: Request):
     print(f"Content-Type: {content_type}")
 
     data = {}
-
-    if 'application/json' in content_type:
-        data = await request.json()
-        print(f"Received JSON data: {json.dumps(data, indent=2)}")
-    else:
-        form = await request.form()
-        print(f"Received form data: {form}")
-        for key, value in form.items():
-            data[key] = value
-        print(f"Parsed data: {json.dumps(data, indent=2)}")
+    form = await request.form()
+    print(f"Received form data: {form}")
+    for key, value in form.items():
+        if key.startswith('fields[') and key.endswith('][value]'):
+            field_id = key.split('[')[1].split(']')[0]
+            data[field_id] = value
+    print(f"Parsed data: {json.dumps(data, indent=2)}")
 
     print("Generating resume text...")
     resume_text = generate_resume_text(data)
@@ -132,8 +129,8 @@ async def submit_resume(request: Request):
     with open(cache_file, "w") as f:
         json.dump(cache_data, f)
 
-    # Return only HTTP 200 with no content to satisfy Elementor Webhook
-    return JSONResponse(content=None, status_code=200)
+    # Return only HTTP 200 with true empty body to satisfy Elementor Webhook
+    return Response(status_code=200)
 
 # API endpoint to download generated PDF
 
