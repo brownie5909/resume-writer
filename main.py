@@ -132,13 +132,10 @@ async def submit_resume(request: Request):
     with open(cache_file, "w") as f:
         json.dump(cache_data, f)
 
-    # Return what Elementor expects when Advanced Data is ON
+    # Return the exact structure Elementor expects when Advanced Data is ON
     return JSONResponse({
-        "data": {
-            "message": "Resume generated successfully.",
-            "data": {
-                "resume_output": html_resume
-            }
+        "fields": {
+            "resume_output": html_resume
         }
     }, status_code=200)
 
