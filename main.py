@@ -133,15 +133,7 @@ async def submit_resume(request: Request):
         json.dump(cache_data, f)
 
     # Return only resume_id
-    return JSONResponse({
-        "success": True,
-        "data": {
-            "message": "Resume generated successfully.",
-            "fields": {
-                "resume_id": resume_id
-            }
-        }
-    }, status_code=200)
+return JSONResponse({}, status_code=200)
 
 # API endpoint to download generated PDF
 
