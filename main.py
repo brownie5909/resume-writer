@@ -134,8 +134,12 @@ async def submit_resume(request: Request):
 
     # Return only resume_id
     return JSONResponse({
-        "fields": {
-            "resume_id": resume_id
+        "success": True,
+        "data": {
+            "message": "Resume generated successfully.",
+            "fields": {
+                "resume_id": resume_id
+            }
         }
     }, status_code=200)
 
