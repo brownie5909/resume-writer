@@ -87,7 +87,7 @@ def generate_pdf(content):
         HTML(string=content).write_pdf(tmp.name)
         return tmp.name
 
-# API endpoint to receive resume data and return only resume_id
+# API endpoint to receive resume data and save resume
 
 @app.post("/submit_resume")
 async def submit_resume(request: Request):
@@ -132,8 +132,8 @@ async def submit_resume(request: Request):
     with open(cache_file, "w") as f:
         json.dump(cache_data, f)
 
-    # Return only resume_id
-    return JSONResponse({}, status_code=200)
+    # Return only HTTP 200 with no content to satisfy Elementor Webhook
+    return JSONResponse(content=None, status_code=200)
 
 # API endpoint to download generated PDF
 
