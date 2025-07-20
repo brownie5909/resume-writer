@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from weasyprint import HTML
 import openai
@@ -129,15 +129,14 @@ async def submit_resume(request: Request):
     with open(cache_file, "w") as f:
         json.dump(cache_data, f)
 
-    # Return only HTTP 200 with true empty body to satisfy Elementor Webhook
-    return Response(status_code=200)return JSONResponse({
+    # Return JSON that Elementor expects to suppress webhook error
+    return JSONResponse({
         "success": True,
         "data": {
             "message": "Your resume is being generated.",
             "data": []
         }
     }, status_code=200)
-
 
 # API endpoint to download generated PDF
 
