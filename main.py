@@ -7,6 +7,7 @@ import tempfile
 import os
 import json
 import uuid
+import traceback
 
 from openai import OpenAI
 
@@ -91,52 +92,70 @@ def generate_pdf(content):
 
 @app.post("/submit_resume")
 async def submit_resume(request: Request):
-    print("Received request at /submit_resume")
+    try:
+        print("Received request at /submit_resume")
 
-    content_type = request.headers.get('content-type', '')
-    print(f"Content-Type: {content_type}")
+        content_type = request.headers.get('content-type', '')
+        print(f"Content-Type: {content_type}")
 
-    data = {}
-    form = await request.form()
-    print(f"Received form data: {form}")
-    for key, value in form.items():
-        if key.startswith('fields[') and key.endswith('][value]'):
-            field_id = key.split('[')[1].split(']')[0]
-            data[field_id] = value
-    print(f"Parsed data: {json.dumps(data, indent=2)}")
+        data = {}
+        form = await request.form()
+        print(f"Received form data: {form}")
+        for key, value in form.items():
+            if key.startswith('fields[') and key.endswith('][value]'):
+                field_id = key.split('[')[1].split(']')[0]
+                data[field_id] = value
+        print(f"Parsed data: {json.dumps(data, indent=2)}")
 
-    print("Generating resume text...")
-    resume_text = generate_resume_text(data)
-    print("Resume text generated.")
+        print("Generating resume text...")
+        resume_text = generate_resume_text(data)
+        print("Resume text generated.")
 
-    resume_id = str(uuid.uuid4())
-    data['resume_id'] = resume_id
+        resume_id = str(uuid.uuid4())
+        data['resume_id'] = resume_id
 
-    html_resume = generate_html_resume(data, resume_text)
-    print("HTML resume generated.")
+        html_resume = generate_html_resume(data, resume_text)
+        print("HTML resume generated.")
 
-    pdf_path = generate_pdf(html_resume)
-    print(f"PDF generated at: {pdf_path}")
+        pdf_path = generate_pdf(html_resume)
+        print(f"PDF generated at: {pdf_path}")
 
-    # Save cache
-    cache_data = {
-        "html_resume": html_resume,
-        "download_link": f"/download_pdf/{os.path.basename(pdf_path)}",
-        "template_choice": data.get('template_choice', 'conservative')
-    }
-    cache_file = f"/tmp/{resume_id}.json"
-    print(f"Saving cache data to {cache_file}")
-    with open(cache_file, "w") as f:
-        json.dump(cache_data, f)
-
-    # Return JSON that Elementor expects to suppress webhook error
-    return JSONResponse({
-        "success": True,
-        "data": {
-            "message": "Your resume is being generated.",
-            "data": []
+        # Save cache
+        cache_data = {
+            "html_resume": html_resume,
+            "download_link": f"/download_pdf/{os.path.basename(pdf_path)}",
+            "template_choice": data.get('template_choice', 'conservative')
         }
-    }, status_code=200)
+        cache_file = f"/tmp/{resume_id}.json"
+        print(f"Saving cache data to {cache_file}")
+        with open(cache_file, "w") as f:
+            json.dump(cache_data, f)
+
+        # Verify file was written
+        if os.path.exists(cache_file):
+            print(f"✅ Confirmed: {cache_file} exists.")
+        else:
+            print(f"❌ Error: {cache_file} was NOT created.")
+
+        # Return JSON that Elementor expects to suppress webhook error
+        return JSONResponse({
+            "success": True,
+            "data": {
+                "message": "Your resume is being generated.",
+                "data": []
+            }
+        }, status_code=200)
+
+    except Exception as e:
+        print("❌ Exception occurred:")
+        print(traceback.format_exc())
+        return JSONResponse({
+            "success": False,
+            "data": {
+                "message": f"Internal server error: {str(e)}",
+                "data": []
+            }
+        }, status_code=500)
 
 # API endpoint to download generated PDF
 
