@@ -137,12 +137,15 @@ async def submit_resume(request: Request):
         else:
             print(f"❌ Error: {cache_file} was NOT created.")
 
-        # Return JSON that Elementor expects to suppress webhook error
+        # Build fields response for Elementor
+        field_values = {key: value for key, value in data.items()}
+
+        # Return JSON that Elementor expects
         return JSONResponse({
             "success": True,
             "data": {
                 "message": "Your resume is being generated.",
-                "data": []
+                "fields": field_values
             }
         }, status_code=200)
 
