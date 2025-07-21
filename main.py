@@ -39,21 +39,21 @@ async def generate_resume(request: Request):
     ats_mode = body.get("ats_mode", False)
 
     base_prompt = """You are a professional resume and cover letter writer.
-Generate a {style} resume {ats_note} based on the following information:
+Generate a {style} resume {ats_note} in markdown format based on the following information:
 
 {fields}
 
-Output:
-- Resume:
-{cover_note}
+If a cover letter is requested include:
+# Cover Letter
+Otherwise output only the resume:
+# Resume
 """
 
     style = template_choice
     fields = "\n".join([f"{k}: {v}" for k, v in data.items()])
     ats_note = "that is ATS-friendly and plain text" if ats_mode else "with professional formatting"
-    cover_note = "- Cover Letter:" if generate_cover_letter else ""
 
-    prompt = base_prompt.format(style=style, fields=fields, ats_note=ats_note, cover_note=cover_note)
+    prompt = base_prompt.format(style=style, fields=fields, ats_note=ats_note)
 
     client = openai.OpenAI()
 
@@ -71,15 +71,16 @@ Output:
 
     ai_output = response.choices[0].message.content
 
-    # Split output into sections
+    # Parse markdown sections
     resume_text = ""
     cover_letter_text = ""
     current_section = None
+
     for line in ai_output.strip().split("\n"):
-        if line.strip().lower().startswith("resume"):
+        if line.strip().lower().startswith("# resume"):
             current_section = "resume"
             continue
-        elif line.strip().lower().startswith("cover letter"):
+        elif line.strip().lower().startswith("# cover letter"):
             current_section = "cover_letter"
             continue
         if current_section == "resume":
