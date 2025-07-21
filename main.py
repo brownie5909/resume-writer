@@ -25,12 +25,15 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.post("/generate-resume")
 async def generate_resume(request: Request):
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        form = await request.form()
+        body = dict(form)
 
     # Handle both nested and flat inputs
     data = body.get("data")
     if data is None:
-        # Assume flat data and extract special fields
         data = {k: v for k, v in body.items() if k not in ["template_choice", "generate_cover_letter"]}
 
     template_choice = body.get("template_choice", "default")
