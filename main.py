@@ -92,12 +92,18 @@ Otherwise output only the resume:
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
+    page_width = pdf.w - 2 * pdf.l_margin
+
     # Format Resume
     pdf.set_font("Arial", style="B", size=16)
     pdf.cell(0, 10, "Resume", ln=True)
     pdf.set_font("Arial", size=12)
     for line in resume_text.strip().split("\n"):
-        pdf.multi_cell(0, 8, line.strip() or " ")
+        # Prevent FPDFException by ensuring there's enough space
+        if pdf.get_string_width(line.strip() or " ") > page_width:
+            pdf.multi_cell(0, 8, line.strip() or " ")
+        else:
+            pdf.cell(0, 8, line.strip() or " ", ln=True)
 
     # Format Cover Letter if exists
     if generate_cover_letter and cover_letter_text.strip():
@@ -106,7 +112,10 @@ Otherwise output only the resume:
         pdf.cell(0, 10, "Cover Letter", ln=True)
         pdf.set_font("Arial", size=12)
         for line in cover_letter_text.strip().split("\n"):
-            pdf.multi_cell(0, 8, line.strip() or " ")
+            if pdf.get_string_width(line.strip() or " ") > page_width:
+                pdf.multi_cell(0, 8, line.strip() or " ")
+            else:
+                pdf.cell(0, 8, line.strip() or " ", ln=True)
 
     pdf_output = pdf.output(dest='S')
     pdf_bytes = BytesIO(pdf_output)
