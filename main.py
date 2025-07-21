@@ -58,9 +58,12 @@ Skills:
     # Generate PDF in memory
     pdf = FPDF()
     pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
     pdf.set_font("Arial", size=12)
+
     for line in resume_text.strip().split("\n"):
-        pdf.multi_cell(0, 10, line)
+        safe_line = line.strip() or " "  # Prevent empty lines from breaking FPDF
+        pdf.multi_cell(0, 10, safe_line)
 
     pdf_bytes = BytesIO()
     pdf.output(pdf_bytes)
@@ -86,3 +89,5 @@ async def download_resume(pdf_id: str):
     return StreamingResponse(BytesIO(pdf_data), media_type="application/pdf", headers={
         "Content-Disposition": f"attachment; filename=resume_{pdf_id}.pdf"
     })
+
+
