@@ -1,6 +1,3 @@
-
 fastapi
 uvicorn
-pdfkit
-pydantic
-jinja2
+fpdf2
