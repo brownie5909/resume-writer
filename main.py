@@ -82,7 +82,7 @@ Output:
         for wrapped_line in wrapped_lines:
             pdf.multi_cell(page_width, 10, wrapped_line)
 
-    pdf_output = pdf.output(dest='S').encode('latin1')
+    pdf_output = pdf.output(dest='S')  # returns a bytearray in fpdf2
     pdf_bytes = BytesIO(pdf_output)
 
     pdf_id = str(uuid.uuid4())
