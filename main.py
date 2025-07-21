@@ -38,22 +38,27 @@ async def generate_resume(request: Request):
     generate_cover_letter = body.get("generate_cover_letter", False)
     ats_mode = body.get("ats_mode", False)
 
+    if not data.get("full_name") or not data.get("email") or not data.get("job_title"):
+        return JSONResponse(status_code=400, content={"error": "Full Name, Email, and Job Title are required fields."})
+
     base_prompt = """You are a professional resume and cover letter writer.
 Generate a {style} resume {ats_note} in markdown format based on the following information:
 
 {fields}
 
-If a cover letter is requested include:
-# Cover Letter
-Otherwise output only the resume:
-# Resume
+{output_instruction}
 """
 
     style = template_choice
     fields = "\n".join([f"{k}: {v}" for k, v in data.items()])
     ats_note = "that is ATS-friendly and plain text" if ats_mode else "with professional formatting"
 
-    prompt = base_prompt.format(style=style, fields=fields, ats_note=ats_note)
+    if generate_cover_letter:
+        output_instruction = "Include both sections:\n# Resume\n# Cover Letter"
+    else:
+        output_instruction = "Output only the resume section:\n# Resume"
+
+    prompt = base_prompt.format(style=style, fields=fields, ats_note=ats_note, output_instruction=output_instruction)
 
     client = openai.OpenAI()
 
@@ -99,7 +104,6 @@ Otherwise output only the resume:
     pdf.cell(0, 10, "Resume", ln=True)
     pdf.set_font("Arial", size=12)
     for line in resume_text.strip().split("\n"):
-        # Prevent FPDFException by ensuring there's enough space
         if pdf.get_string_width(line.strip() or " ") > page_width:
             pdf.multi_cell(0, 8, line.strip() or " ")
         else:
