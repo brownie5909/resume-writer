@@ -1,4 +1,5 @@
 fastapi
 uvicorn
-fpdf2
+weasyprint
+jinja2
 openai
