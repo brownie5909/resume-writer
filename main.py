@@ -71,19 +71,43 @@ Output:
 
     ai_output = response.choices[0].message.content
 
+    # Split output into sections
+    resume_text = ""
+    cover_letter_text = ""
+    current_section = None
+    for line in ai_output.strip().split("\n"):
+        if line.strip().lower().startswith("resume"):
+            current_section = "resume"
+            continue
+        elif line.strip().lower().startswith("cover letter"):
+            current_section = "cover_letter"
+            continue
+        if current_section == "resume":
+            resume_text += line + "\n"
+        elif current_section == "cover_letter":
+            cover_letter_text += line + "\n"
+
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
+
+    # Format Resume
+    pdf.set_font("Arial", style="B", size=16)
+    pdf.cell(0, 10, "Resume", ln=True)
     pdf.set_font("Arial", size=12)
+    for line in resume_text.strip().split("\n"):
+        pdf.multi_cell(0, 8, line.strip() or " ")
 
-    page_width = pdf.w - 2 * pdf.l_margin
+    # Format Cover Letter if exists
+    if generate_cover_letter and cover_letter_text.strip():
+        pdf.ln(10)
+        pdf.set_font("Arial", style="B", size=16)
+        pdf.cell(0, 10, "Cover Letter", ln=True)
+        pdf.set_font("Arial", size=12)
+        for line in cover_letter_text.strip().split("\n"):
+            pdf.multi_cell(0, 8, line.strip() or " ")
 
-    # Write AI output directly to PDF preserving formatting
-    for line in ai_output.strip().split("\n"):
-        safe_line = line.strip() or " "
-        pdf.multi_cell(page_width, 10, safe_line)
-
-    pdf_output = pdf.output(dest='S')  # returns a bytearray in fpdf2
+    pdf_output = pdf.output(dest='S')
     pdf_bytes = BytesIO(pdf_output)
 
     pdf_id = str(uuid.uuid4())
