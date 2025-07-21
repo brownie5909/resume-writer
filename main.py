@@ -1,7 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from typing import Optional
 from io import BytesIO
 from fpdf import FPDF
 import uuid
@@ -23,13 +23,19 @@ pdf_store = {}
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-class ResumeRequest(BaseModel):
-    data: dict
-    template_choice: str = "default"
-    generate_cover_letter: bool = False
-
 @app.post("/generate-resume")
-async def generate_resume(req: ResumeRequest):
+async def generate_resume(request: Request):
+    body = await request.json()
+
+    # Handle both nested and flat inputs
+    data = body.get("data")
+    if data is None:
+        # Assume flat data and extract special fields
+        data = {k: v for k, v in body.items() if k not in ["template_choice", "generate_cover_letter"]}
+
+    template_choice = body.get("template_choice", "default")
+    generate_cover_letter = body.get("generate_cover_letter", False)
+
     base_prompt = """You are a professional resume and cover letter writer.
 Generate a {style} resume and optionally a cover letter based on the following information:
 
@@ -40,12 +46,11 @@ Output:
 - Cover Letter (if requested):
 """
 
-    style = req.template_choice
-    fields = "\n".join([f"{k}: {v}" for k, v in req.data.items()])
+    style = template_choice
+    fields = "\n".join([f"{k}: {v}" for k, v in data.items()])
 
     prompt = base_prompt.format(style=style, fields=fields)
 
-    # Use OpenAI API with new client
     client = openai.OpenAI()
 
     response = client.chat.completions.create(
