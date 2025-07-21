@@ -20,22 +20,39 @@ app.add_middleware(
 pdf_store = {}
 
 class ResumeRequest(BaseModel):
-    name: str
+    full_name: str
     email: str
-    experience: str
-    job_ad: str
+    phone: str
+    job_title: str
+    company: str
+    years_worked: str
+    responsibilities: str
+    degree: str
+    school: str
+    skills: str
+    summary: str
+    template_choice: str
 
 @app.post("/generate-resume")
 async def generate_resume(req: ResumeRequest):
     resume_text = f"""
-Name: {req.name}
+{req.full_name}
 Email: {req.email}
+Phone: {req.phone}
 
-Experience:
-{req.experience}
+Professional Summary:
+{req.summary}
 
-Summary:
-{req.job_ad}
+Work Experience:
+{req.job_title} at {req.company}
+Years Worked: {req.years_worked}
+Responsibilities: {req.responsibilities}
+
+Education:
+{req.degree} - {req.school}
+
+Skills:
+{req.skills}
     """
 
     # Generate PDF in memory
