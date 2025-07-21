@@ -3,10 +3,11 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from io import BytesIO
-from fpdf import FPDF
 import uuid
 import os
 import openai
+from jinja2 import Template
+from weasyprint import HTML
 
 app = FastAPI()
 
@@ -21,6 +22,53 @@ app.add_middleware(
 pdf_store = {}
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
+
+RESUME_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; }
+        h1 { font-size: 28px; margin-bottom: 5px; }
+        h2 { font-size: 22px; margin-top: 20px; margin-bottom: 5px; border-bottom: 1px solid #ddd; }
+        p { margin: 5px 0; line-height: 1.5; }
+        .section { margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <h1>{{ name }}</h1>
+    <p>{{ email }}</p>
+    <p>{{ phone }}</p>
+
+    <div class="section">
+        <h2>Summary</h2>
+        <p>{{ summary }}</p>
+    </div>
+
+    <div class="section">
+        <h2>Experience</h2>
+        <p>{{ experience }}</p>
+    </div>
+
+    <div class="section">
+        <h2>Education</h2>
+        <p>{{ education }}</p>
+    </div>
+
+    <div class="section">
+        <h2>Skills</h2>
+        <p>{{ skills }}</p>
+    </div>
+
+    {% if cover_letter %}
+    <div class="section">
+        <h2>Cover Letter</h2>
+        <p>{{ cover_letter }}</p>
+    </div>
+    {% endif %}
+</body>
+</html>
+"""
 
 @app.post("/generate-resume")
 async def generate_resume(request: Request):
@@ -42,7 +90,7 @@ async def generate_resume(request: Request):
         return JSONResponse(status_code=400, content={"error": "Full Name, Email, and Job Title are required fields."})
 
     base_prompt = """You are a professional resume and cover letter writer.
-Generate a {style} resume {ats_note} in markdown format based on the following information:
+Generate a {style} resume {ats_note} in structured plain text based on the following information:
 
 {fields}
 
@@ -54,9 +102,9 @@ Generate a {style} resume {ats_note} in markdown format based on the following i
     ats_note = "that is ATS-friendly and plain text" if ats_mode else "with professional formatting"
 
     if generate_cover_letter:
-        output_instruction = "Include both sections:\n# Resume\n# Cover Letter"
+        output_instruction = "Include a cover letter as a separate section after the resume."
     else:
-        output_instruction = "Output only the resume section:\n# Resume"
+        output_instruction = "Output only the resume."
 
     prompt = base_prompt.format(style=style, fields=fields, ats_note=ats_note, output_instruction=output_instruction)
 
@@ -76,53 +124,25 @@ Generate a {style} resume {ats_note} in markdown format based on the following i
 
     ai_output = response.choices[0].message.content
 
-    # Parse markdown sections
-    resume_text = ""
-    cover_letter_text = ""
-    current_section = None
+    # Extract sections for the template
+    sections = {
+        "name": data.get("full_name", ""),
+        "email": data.get("email", ""),
+        "phone": data.get("phone", ""),
+        "summary": data.get("summary", ""),
+        "experience": data.get("responsibilities", ""),
+        "education": f"{data.get('degree', '')} - {data.get('school', '')}",
+        "skills": data.get("skills", ""),
+        "cover_letter": ai_output.split("Cover Letter:")[-1].strip() if generate_cover_letter and "Cover Letter:" in ai_output else ""
+    }
 
-    for line in ai_output.strip().split("\n"):
-        if line.strip().lower().startswith("# resume"):
-            current_section = "resume"
-            continue
-        elif line.strip().lower().startswith("# cover letter"):
-            current_section = "cover_letter"
-            continue
-        if current_section == "resume":
-            resume_text += line + "\n"
-        elif current_section == "cover_letter":
-            cover_letter_text += line + "\n"
+    # Render HTML template
+    template = Template(RESUME_TEMPLATE)
+    html_out = template.render(**sections)
 
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-
-    page_width = pdf.w - 2 * pdf.l_margin
-
-    # Format Resume
-    pdf.set_font("Arial", style="B", size=16)
-    pdf.cell(0, 10, "Resume", ln=True)
-    pdf.set_font("Arial", size=12)
-    for line in resume_text.strip().split("\n"):
-        if pdf.get_string_width(line.strip() or " ") > page_width:
-            pdf.multi_cell(0, 8, line.strip() or " ")
-        else:
-            pdf.cell(0, 8, line.strip() or " ", ln=True)
-
-    # Format Cover Letter if exists
-    if generate_cover_letter and cover_letter_text.strip():
-        pdf.ln(10)
-        pdf.set_font("Arial", style="B", size=16)
-        pdf.cell(0, 10, "Cover Letter", ln=True)
-        pdf.set_font("Arial", size=12)
-        for line in cover_letter_text.strip().split("\n"):
-            if pdf.get_string_width(line.strip() or " ") > page_width:
-                pdf.multi_cell(0, 8, line.strip() or " ")
-            else:
-                pdf.cell(0, 8, line.strip() or " ", ln=True)
-
-    pdf_output = pdf.output(dest='S')
-    pdf_bytes = BytesIO(pdf_output)
+    # Generate PDF using WeasyPrint
+    pdf_bytes = BytesIO()
+    HTML(string=html_out).write_pdf(pdf_bytes)
 
     pdf_id = str(uuid.uuid4())
     pdf_store[pdf_id] = pdf_bytes.getvalue()
