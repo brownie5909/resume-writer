@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from io import BytesIO
 from fpdf import FPDF
 import uuid
+import textwrap
 
 app = FastAPI()
 
@@ -62,8 +63,11 @@ Skills:
     pdf.set_font("Arial", size=12)
 
     for line in resume_text.strip().split("\n"):
-        safe_line = line.strip() or " "  # Prevent empty lines from breaking FPDF
-        pdf.multi_cell(0, 10, safe_line)
+        safe_line = line.strip() or " "
+        # Wrap long lines manually to prevent FPDFException
+        wrapped_lines = textwrap.wrap(safe_line, width=90) or [" "]
+        for wrapped_line in wrapped_lines:
+            pdf.multi_cell(0, 10, wrapped_line)
 
     pdf_bytes = BytesIO()
     pdf.output(pdf_bytes)
@@ -89,5 +93,3 @@ async def download_resume(pdf_id: str):
     return StreamingResponse(BytesIO(pdf_data), media_type="application/pdf", headers={
         "Content-Disposition": f"attachment; filename=resume_{pdf_id}.pdf"
     })
-
-
