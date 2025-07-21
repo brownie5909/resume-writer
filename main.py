@@ -34,7 +34,7 @@ Email: {req.email}
 Experience:
 {req.experience}
 
-Matched Job Ad:
+Summary:
 {req.job_ad}
     """
 
