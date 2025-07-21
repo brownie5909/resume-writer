@@ -5,7 +5,6 @@ from typing import Optional
 from io import BytesIO
 from fpdf import FPDF
 import uuid
-import textwrap
 import os
 import openai
 
@@ -33,25 +32,28 @@ async def generate_resume(request: Request):
 
     data = body.get("data")
     if data is None:
-        data = {k: v for k, v in body.items() if k not in ["template_choice", "generate_cover_letter"]}
+        data = {k: v for k, v in body.items() if k not in ["template_choice", "generate_cover_letter", "ats_mode"]}
 
     template_choice = body.get("template_choice", "default")
     generate_cover_letter = body.get("generate_cover_letter", False)
+    ats_mode = body.get("ats_mode", False)
 
     base_prompt = """You are a professional resume and cover letter writer.
-Generate a {style} resume and optionally a cover letter based on the following information:
+Generate a {style} resume {ats_note} based on the following information:
 
 {fields}
 
 Output:
 - Resume:
-- Cover Letter (if requested):
+{cover_note}
 """
 
     style = template_choice
     fields = "\n".join([f"{k}: {v}" for k, v in data.items()])
+    ats_note = "that is ATS-friendly and plain text" if ats_mode else "with professional formatting"
+    cover_note = "- Cover Letter:" if generate_cover_letter else ""
 
-    prompt = base_prompt.format(style=style, fields=fields)
+    prompt = base_prompt.format(style=style, fields=fields, ats_note=ats_note, cover_note=cover_note)
 
     client = openai.OpenAI()
 
@@ -76,11 +78,10 @@ Output:
 
     page_width = pdf.w - 2 * pdf.l_margin
 
+    # Write AI output directly to PDF preserving formatting
     for line in ai_output.strip().split("\n"):
         safe_line = line.strip() or " "
-        wrapped_lines = textwrap.wrap(safe_line, width=90) or [" "]
-        for wrapped_line in wrapped_lines:
-            pdf.multi_cell(page_width, 10, wrapped_line)
+        pdf.multi_cell(page_width, 10, safe_line)
 
     pdf_output = pdf.output(dest='S')  # returns a bytearray in fpdf2
     pdf_bytes = BytesIO(pdf_output)
