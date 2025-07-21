@@ -55,14 +55,17 @@ Output:
 
     client = openai.OpenAI()
 
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a professional career assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a professional career assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7
+        )
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"OpenAI API error: {str(e)}"})
 
     ai_output = response.choices[0].message.content
 
