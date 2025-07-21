@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from io import BytesIO
-from fpdf import FPDF  # This works with `fpdf2`
+from fpdf import FPDF
 import uuid
 
 app = FastAPI()
