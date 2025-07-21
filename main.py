@@ -6,6 +6,8 @@ from io import BytesIO
 from fpdf import FPDF
 import uuid
 import textwrap
+import os
+import openai
 
 app = FastAPI()
 
@@ -19,42 +21,44 @@ app.add_middleware(
 
 pdf_store = {}
 
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
 class ResumeRequest(BaseModel):
-    full_name: str
-    email: str
-    phone: str
-    job_title: str
-    company: str
-    years_worked: str
-    responsibilities: str
-    degree: str
-    school: str
-    skills: str
-    summary: str
-    template_choice: str
+    data: dict
+    template_choice: str = "default"
+    generate_cover_letter: bool = False
 
 @app.post("/generate-resume")
 async def generate_resume(req: ResumeRequest):
-    resume_text = f"""
-{req.full_name}
-Email: {req.email}
-Phone: {req.phone}
+    # Prepare prompt for AI
+    base_prompt = """You are a professional resume and cover letter writer.
+Generate a {style} resume and optionally a cover letter based on the following information:
 
-Professional Summary:
-{req.summary}
+{fields}
 
-Work Experience:
-{req.job_title} at {req.company}
-Years Worked: {req.years_worked}
-Responsibilities: {req.responsibilities}
+Output:
+- Resume:
+- Cover Letter (if requested):
+"""
 
-Education:
-{req.degree} - {req.school}
+    style = req.template_choice
+    fields = "\n".join([f"{k}: {v}" for k, v in req.data.items()])
 
-Skills:
-{req.skills}
-    """
+    prompt = base_prompt.format(style=style, fields=fields)
 
+    # Call OpenAI API
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a professional career assistant."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7
+    )
+
+    ai_output = response['choices'][0]['message']['content']
+
+    # Generate PDF from AI output
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -62,7 +66,7 @@ Skills:
 
     page_width = pdf.w - 2 * pdf.l_margin
 
-    for line in resume_text.strip().split("\n"):
+    for line in ai_output.strip().split("\n"):
         safe_line = line.strip() or " "
         wrapped_lines = textwrap.wrap(safe_line, width=90) or [" "]
         for wrapped_line in wrapped_lines:
@@ -75,10 +79,10 @@ Skills:
     pdf_id = str(uuid.uuid4())
     pdf_store[pdf_id] = pdf_bytes.getvalue()
 
-    download_url = f"/download-resume/{pdf_id}"
+    download_url = f"https://resume-writer.onrender.com/download-resume/{pdf_id}"
 
     return JSONResponse({
-        "resume_text": resume_text.strip(),
+        "resume_text": ai_output.strip(),
         "pdf_url": download_url
     })
 
