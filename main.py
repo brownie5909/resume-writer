@@ -27,7 +27,7 @@ TEMPLATES = {
     "default": """
     <!DOCTYPE html>
     <html>
-    <head><style>body { font-family: Arial; margin: 30px; } h1 { font-size: 28px; } h2 { font-size: 22px; border-bottom: 1px solid #ddd; } p { margin: 5px 0; }</style></head>
+    <head><style>body { font-family: Arial; margin: 30px; } h1 { font-size: 28px; } h2 { font-size: 22px; border-bottom: 1px solid #ddd; } p { margin: 5px 0; white-space: pre-wrap; }</style></head>
     <body>
         <h1>{{ name }}</h1>
         <p>{{ email }} | {{ phone }}</p>
@@ -41,7 +41,7 @@ TEMPLATES = {
     "conservative": """
     <!DOCTYPE html>
     <html>
-    <head><style>body { font-family: Times New Roman; margin: 30px; color: #000; } h1 { font-size: 26px; } h2 { font-size: 20px; text-decoration: underline; } p { margin: 5px 0; }</style></head>
+    <head><style>body { font-family: Times New Roman; margin: 30px; color: #000; } h1 { font-size: 26px; } h2 { font-size: 20px; text-decoration: underline; } p { margin: 5px 0; white-space: pre-wrap; }</style></head>
     <body>
         <h1>{{ name }}</h1>
         <p>{{ email }} | {{ phone }}</p>
@@ -55,7 +55,7 @@ TEMPLATES = {
     "creative": """
     <!DOCTYPE html>
     <html>
-    <head><style>body { font-family: Helvetica, sans-serif; margin: 30px; color: #333; } h1 { font-size: 30px; color: #4CAF50; } h2 { font-size: 22px; color: #2196F3; margin-top:20px; } p { margin: 5px 0; }</style></head>
+    <head><style>body { font-family: Helvetica, sans-serif; margin: 30px; color: #333; } h1 { font-size: 30px; color: #4CAF50; } h2 { font-size: 22px; color: #2196F3; margin-top:20px; } p { margin: 5px 0; white-space: pre-wrap; }</style></head>
     <body>
         <h1>{{ name }}</h1>
         <p style="font-style: italic;">{{ email }} | {{ phone }}</p>
@@ -69,7 +69,7 @@ TEMPLATES = {
     "executive": """
     <!DOCTYPE html>
     <html>
-    <head><style>body { font-family: Georgia; margin: 40px; } h1 { font-size: 32px; color: #000; } h2 { font-size: 24px; border-bottom: 2px solid #000; margin-top:20px; } p { margin: 8px 0; }</style></head>
+    <head><style>body { font-family: Georgia; margin: 40px; } h1 { font-size: 32px; color: #000; } h2 { font-size: 24px; border-bottom: 2px solid #000; margin-top:20px; } p { margin: 8px 0; white-space: pre-wrap; }</style></head>
     <body>
         <h1>{{ name }}</h1>
         <p>{{ email }} | {{ phone }}</p>
@@ -141,10 +141,10 @@ Generate a {style} resume {ats_note} in structured plain text based on the follo
         "name": data.get("full_name", ""),
         "email": data.get("email", ""),
         "phone": data.get("phone", ""),
-        "summary": data.get("summary", ""),
-        "experience": data.get("responsibilities", ""),
-        "education": f"{data.get('degree', '')} - {data.get('school', '')}",
-        "skills": data.get("skills", ""),
+        "summary": ai_output.split("Summary:")[-1].split("Experience:")[0].strip() if "Summary:" in ai_output and "Experience:" in ai_output else data.get("summary", ""),
+        "experience": ai_output.split("Experience:")[-1].split("Education:")[0].strip() if "Experience:" in ai_output and "Education:" in ai_output else data.get("responsibilities", ""),
+        "education": ai_output.split("Education:")[-1].split("Skills:")[0].strip() if "Education:" in ai_output and "Skills:" in ai_output else f"{data.get('degree', '')} - {data.get('school', '')}",
+        "skills": ai_output.split("Skills:")[-1].split("Cover Letter:")[0].strip() if "Skills:" in ai_output else data.get("skills", ""),
         "cover_letter": ai_output.split("Cover Letter:")[-1].strip() if generate_cover_letter and "Cover Letter:" in ai_output else ""
     }
 
