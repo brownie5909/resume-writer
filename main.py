@@ -30,7 +30,6 @@ class ResumeRequest(BaseModel):
 
 @app.post("/generate-resume")
 async def generate_resume(req: ResumeRequest):
-    # Prepare prompt for AI
     base_prompt = """You are a professional resume and cover letter writer.
 Generate a {style} resume and optionally a cover letter based on the following information:
 
@@ -46,8 +45,10 @@ Output:
 
     prompt = base_prompt.format(style=style, fields=fields)
 
-    # Call OpenAI API
-    response = openai.ChatCompletion.create(
+    # Use OpenAI API with new client
+    client = openai.OpenAI()
+
+    response = client.chat.completions.create(
         model="gpt-4",
         messages=[
             {"role": "system", "content": "You are a professional career assistant."},
@@ -56,9 +57,8 @@ Output:
         temperature=0.7
     )
 
-    ai_output = response['choices'][0]['message']['content']
+    ai_output = response.choices[0].message.content
 
-    # Generate PDF from AI output
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
