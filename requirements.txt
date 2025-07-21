@@ -1,5 +1,6 @@
+
 fastapi
 uvicorn
-weasyprint
-openai
-python-multipart
+pdfkit
+pydantic
+jinja2
