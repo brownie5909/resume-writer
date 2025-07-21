@@ -23,52 +23,64 @@ pdf_store = {}
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-RESUME_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 30px; }
-        h1 { font-size: 28px; margin-bottom: 5px; }
-        h2 { font-size: 22px; margin-top: 20px; margin-bottom: 5px; border-bottom: 1px solid #ddd; }
-        p { margin: 5px 0; line-height: 1.5; }
-        .section { margin-top: 15px; }
-    </style>
-</head>
-<body>
-    <h1>{{ name }}</h1>
-    <p>{{ email }}</p>
-    <p>{{ phone }}</p>
-
-    <div class="section">
-        <h2>Summary</h2>
-        <p>{{ summary }}</p>
-    </div>
-
-    <div class="section">
-        <h2>Experience</h2>
-        <p>{{ experience }}</p>
-    </div>
-
-    <div class="section">
-        <h2>Education</h2>
-        <p>{{ education }}</p>
-    </div>
-
-    <div class="section">
-        <h2>Skills</h2>
-        <p>{{ skills }}</p>
-    </div>
-
-    {% if cover_letter %}
-    <div class="section">
-        <h2>Cover Letter</h2>
-        <p>{{ cover_letter }}</p>
-    </div>
-    {% endif %}
-</body>
-</html>
-"""
+TEMPLATES = {
+    "default": """
+    <!DOCTYPE html>
+    <html>
+    <head><style>body { font-family: Arial; margin: 30px; } h1 { font-size: 28px; } h2 { font-size: 22px; border-bottom: 1px solid #ddd; } p { margin: 5px 0; }</style></head>
+    <body>
+        <h1>{{ name }}</h1>
+        <p>{{ email }} | {{ phone }}</p>
+        <h2>Summary</h2><p>{{ summary }}</p>
+        <h2>Experience</h2><p>{{ experience }}</p>
+        <h2>Education</h2><p>{{ education }}</p>
+        <h2>Skills</h2><p>{{ skills }}</p>
+        {% if cover_letter %}<h2>Cover Letter</h2><p>{{ cover_letter }}</p>{% endif %}
+    </body></html>
+    """,
+    "conservative": """
+    <!DOCTYPE html>
+    <html>
+    <head><style>body { font-family: Times New Roman; margin: 30px; color: #000; } h1 { font-size: 26px; } h2 { font-size: 20px; text-decoration: underline; } p { margin: 5px 0; }</style></head>
+    <body>
+        <h1>{{ name }}</h1>
+        <p>{{ email }} | {{ phone }}</p>
+        <h2>Professional Summary</h2><p>{{ summary }}</p>
+        <h2>Work History</h2><p>{{ experience }}</p>
+        <h2>Education</h2><p>{{ education }}</p>
+        <h2>Skills</h2><p>{{ skills }}</p>
+        {% if cover_letter %}<h2>Cover Letter</h2><p>{{ cover_letter }}</p>{% endif %}
+    </body></html>
+    """,
+    "creative": """
+    <!DOCTYPE html>
+    <html>
+    <head><style>body { font-family: Helvetica, sans-serif; margin: 30px; color: #333; } h1 { font-size: 30px; color: #4CAF50; } h2 { font-size: 22px; color: #2196F3; margin-top:20px; } p { margin: 5px 0; }</style></head>
+    <body>
+        <h1>{{ name }}</h1>
+        <p style="font-style: italic;">{{ email }} | {{ phone }}</p>
+        <h2>About Me</h2><p>{{ summary }}</p>
+        <h2>Experience</h2><p>{{ experience }}</p>
+        <h2>Education</h2><p>{{ education }}</p>
+        <h2>Skills</h2><p>{{ skills }}</p>
+        {% if cover_letter %}<h2>My Cover Letter</h2><p>{{ cover_letter }}</p>{% endif %}
+    </body></html>
+    """,
+    "executive": """
+    <!DOCTYPE html>
+    <html>
+    <head><style>body { font-family: Georgia; margin: 40px; } h1 { font-size: 32px; color: #000; } h2 { font-size: 24px; border-bottom: 2px solid #000; margin-top:20px; } p { margin: 8px 0; }</style></head>
+    <body>
+        <h1>{{ name }}</h1>
+        <p>{{ email }} | {{ phone }}</p>
+        <h2>Executive Summary</h2><p>{{ summary }}</p>
+        <h2>Professional Experience</h2><p>{{ experience }}</p>
+        <h2>Education</h2><p>{{ education }}</p>
+        <h2>Core Competencies</h2><p>{{ skills }}</p>
+        {% if cover_letter %}<h2>Cover Letter</h2><p>{{ cover_letter }}</p>{% endif %}
+    </body></html>
+    """
+}
 
 @app.post("/generate-resume")
 async def generate_resume(request: Request):
@@ -137,7 +149,8 @@ Generate a {style} resume {ats_note} in structured plain text based on the follo
     }
 
     # Render HTML template
-    template = Template(RESUME_TEMPLATE)
+    template_html = TEMPLATES.get(template_choice, TEMPLATES["default"])
+    template = Template(template_html)
     html_out = template.render(**sections)
 
     # Generate PDF using WeasyPrint
