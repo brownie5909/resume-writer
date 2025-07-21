@@ -31,7 +31,6 @@ async def generate_resume(request: Request):
         form = await request.form()
         body = dict(form)
 
-    # Handle both nested and flat inputs
     data = body.get("data")
     if data is None:
         data = {k: v for k, v in body.items() if k not in ["template_choice", "generate_cover_letter"]}
@@ -80,9 +79,8 @@ Output:
         for wrapped_line in wrapped_lines:
             pdf.multi_cell(page_width, 10, wrapped_line)
 
-    pdf_bytes = BytesIO()
-    pdf.output(pdf_bytes)
-    pdf_bytes.seek(0)
+    pdf_output = pdf.output(dest='S').encode('latin1')
+    pdf_bytes = BytesIO(pdf_output)
 
     pdf_id = str(uuid.uuid4())
     pdf_store[pdf_id] = pdf_bytes.getvalue()
