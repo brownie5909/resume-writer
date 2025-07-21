@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -17,7 +17,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory store for PDFs
 pdf_store = {}
 
 class ResumeRequest(BaseModel):
@@ -56,24 +55,23 @@ Skills:
 {req.skills}
     """
 
-    # Generate PDF in memory
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.set_font("Arial", size=12)
 
+    page_width = pdf.w - 2 * pdf.l_margin
+
     for line in resume_text.strip().split("\n"):
         safe_line = line.strip() or " "
-        # Wrap long lines manually to prevent FPDFException
         wrapped_lines = textwrap.wrap(safe_line, width=90) or [" "]
         for wrapped_line in wrapped_lines:
-            pdf.multi_cell(0, 10, wrapped_line)
+            pdf.multi_cell(page_width, 10, wrapped_line)
 
     pdf_bytes = BytesIO()
     pdf.output(pdf_bytes)
     pdf_bytes.seek(0)
 
-    # Store in-memory with a unique ID
     pdf_id = str(uuid.uuid4())
     pdf_store[pdf_id] = pdf_bytes.getvalue()
 
