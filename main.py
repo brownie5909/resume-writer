@@ -19,6 +19,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from routes.interview import router as interview_router
+
+app.include_router(interview_router)
+
+
 pdf_store = {}
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
