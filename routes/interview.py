@@ -1,95 +1,51 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 import os
-import openai
+from openai import OpenAI
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
 router = APIRouter()
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 class InterviewPrepRequest(BaseModel):
     company: str
     role: str
 
-class PracticeFeedbackRequest(BaseModel):
+class FeedbackRequest(BaseModel):
     question: str
     answer: str
 
 @router.post("/interview-prep")
-async def interview_prep(payload: InterviewPrepRequest):
-    prompt = f"""
-You are an AI career coach helping someone prepare for an interview.
-Company: {payload.company}
-Role: {payload.role}
+async def interview_prep(data: InterviewPrepRequest):
+    prompt = f"""You are a career coach. Provide insights about the company '{data.company}' and the role '{data.role}'.
+1. Summary of what the company does
+2. What this company looks for in a {data.role}
+3. Recent news or trends that may affect the company
+4. Questions a candidate should ask in an interview
+5. Cultural values or unique points about the company
+6. 6 likely interview questions for this role"""
 
-Provide:
-1. A short summary of what this company does
-2. Why this role is important to them
-3. 6 likely interview questions for this role
-4. 3 company-specific insights (culture, values, recent news)
-5. Final tips for impressing in the interview
-"""
-    completion = openai.chat.completions.create(
+    chat = client.chat.completions.create(
         model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a helpful career advisor."},
-            {"role": "user", "content": prompt}
-        ],
+        messages=[{"role": "user", "content": prompt}],
         temperature=0.7
     )
-    return {"success": True, "prep": completion.choices[0].message.content.strip()}
+
+    response_text = chat.choices[0].message.content
+    return {"success": True, "prep": response_text}
+
 
 @router.post("/interview-feedback")
-async def interview_feedback(payload: PracticeFeedbackRequest):
-    prompt = f"""
-You are an AI interview coach. Give helpful, specific feedback on this answer to the interview question below.
+async def interview_feedback(data: FeedbackRequest):
+    prompt = f"""You are a job interview coach. A candidate was asked the question: "{data.question}"
+They answered: "{data.answer}"
 
-Question: {payload.question}
-Candidate's Answer: {payload.answer}
+Give friendly but direct feedback on how they could improve their response, including what was strong and what was missing."""
 
-Focus on strengths, clarity, and what could be improved. Keep it supportive.
-"""
-    completion = openai.chat.completions.create(
+    chat = client.chat.completions.create(
         model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are an expert interview coach."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.6
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7
     )
-    return {"success": True, "feedback": completion.choices[0].message.content.strip()}
 
-@router.post("/improve-answer")
-async def improve_answer(request: Request):
-    data = await request.json()
-    question = data.get("question", "").strip()
-    answer = data.get("answer", "").strip()
-    feedback = data.get("feedback", "").strip()
-
-    if not question or not answer:
-        return JSONResponse(status_code=422, content={"success": False, "error": "Missing question or answer."})
-
-    try:
-        prompt = f"""Improve the following interview answer based on the feedback provided.
-
-Job Interview Question: {question}
-
-Original Answer:
-{answer}
-
-Feedback from coach:
-{feedback}
-
-Return only an improved answer with clearer structure, more impact, and stronger professional language."""
-
-        client = OpenAI()
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7
-        )
-        improved = response.choices[0].message.content.strip()
-        return {"success": True, "improved": improved}
-
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
-
+    return {"success": True, "feedback": chat.choices[0].message.content}
