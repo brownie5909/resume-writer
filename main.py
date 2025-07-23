@@ -8,6 +8,10 @@ import os
 import openai
 from jinja2 import Template
 from weasyprint import HTML
+from routes.interview import router as interview_router
+
+app.include_router(interview_router)
+
 
 app = FastAPI()
 
