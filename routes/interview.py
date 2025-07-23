@@ -57,3 +57,39 @@ Focus on strengths, clarity, and what could be improved. Keep it supportive.
         temperature=0.6
     )
     return {"success": True, "feedback": completion.choices[0].message.content.strip()}
+
+@router.post("/improve-answer")
+async def improve_answer(request: Request):
+    data = await request.json()
+    question = data.get("question", "").strip()
+    answer = data.get("answer", "").strip()
+    feedback = data.get("feedback", "").strip()
+
+    if not question or not answer:
+        return JSONResponse(status_code=422, content={"success": False, "error": "Missing question or answer."})
+
+    try:
+        prompt = f"""Improve the following interview answer based on the feedback provided.
+
+Job Interview Question: {question}
+
+Original Answer:
+{answer}
+
+Feedback from coach:
+{feedback}
+
+Return only an improved answer with clearer structure, more impact, and stronger professional language."""
+
+        client = OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7
+        )
+        improved = response.choices[0].message.content.strip()
+        return {"success": True, "improved": improved}
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
