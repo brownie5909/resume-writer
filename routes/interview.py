@@ -4,7 +4,6 @@ import os
 import openai
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
-
 router = APIRouter()
 
 class InterviewPrepRequest(BaseModel):
@@ -29,19 +28,15 @@ Provide:
 4. 3 company-specific insights (culture, values, recent news)
 5. Final tips for impressing in the interview
 """
-    try:
-        completion = openai.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful career advisor."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7
-        )
-        reply = completion.choices[0].message.content.strip()
-        return {"success": True, "prep": reply}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    completion = openai.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a helpful career advisor."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7
+    )
+    return {"success": True, "prep": completion.choices[0].message.content.strip()}
 
 @router.post("/interview-feedback")
 async def interview_feedback(payload: PracticeFeedbackRequest):
@@ -53,16 +48,12 @@ Candidate's Answer: {payload.answer}
 
 Focus on strengths, clarity, and what could be improved. Keep it supportive.
 """
-    try:
-        completion = openai.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an expert interview coach."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.6
-        )
-        reply = completion.choices[0].message.content.strip()
-        return {"success": True, "feedback": reply}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    completion = openai.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are an expert interview coach."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.6
+    )
+    return {"success": True, "feedback": completion.choices[0].message.content.strip()}
