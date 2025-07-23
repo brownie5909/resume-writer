@@ -1,51 +1,54 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 import os
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 router = APIRouter()
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-class InterviewPrepRequest(BaseModel):
+class InterviewInput(BaseModel):
     company: str
     role: str
 
-class FeedbackRequest(BaseModel):
-    question: str
-    answer: str
-
 @router.post("/interview-prep")
-async def interview_prep(data: InterviewPrepRequest):
-    prompt = f"""You are a career coach. Provide insights about the company '{data.company}' and the role '{data.role}'.
-1. Summary of what the company does
-2. What this company looks for in a {data.role}
-3. Recent news or trends that may affect the company
-4. Questions a candidate should ask in an interview
-5. Cultural values or unique points about the company
-6. 6 likely interview questions for this role"""
+async def interview_prep(payload: InterviewInput):
+    prompt = f"""You are a career coach helping someone prepare for a job interview.
 
-    chat = client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7
-    )
+Company: {payload.company}
+Role: {payload.role}
 
-    response_text = chat.choices[0].message.content
-    return {"success": True, "prep": response_text}
+Return:
+1. A clear, structured interview preparation summary
+2. 6 likely interview questions — numbered clearly
 
+Format:
+Return the interview prep in markdown-style text.
+Then list the 6 likely questions on separate lines in this format:
+Q: [question]"""
 
-@router.post("/interview-feedback")
-async def interview_feedback(data: FeedbackRequest):
-    prompt = f"""You are a job interview coach. A candidate was asked the question: "{data.question}"
-They answered: "{data.answer}"
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        raw_output = response.choices[0].message.content.strip()
 
-Give friendly but direct feedback on how they could improve their response, including what was strong and what was missing."""
+        # Extract questions from markdown-style output
+        lines = raw_output.splitlines()
+        questions = [line[3:].strip() for line in lines if line.startswith("Q: ")]
 
-    chat = client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7
-    )
+        # Remove questions from prep text
+        prep_text = "\n".join(line for line in lines if not line.startswith("Q: ")).strip()
 
-    return {"success": True, "feedback": chat.choices[0].message.content}
+        return {
+            "success": True,
+            "prep": prep_text,
+            "questions": questions
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
