@@ -3,3 +3,4 @@ uvicorn
 weasyprint
 jinja2
 openai
+python-dotenv
