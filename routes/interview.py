@@ -1,20 +1,11 @@
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter
 from pydantic import BaseModel
 import os
 import openai
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
+router = APIRouter()
 
 class InterviewPrepRequest(BaseModel):
     company: str
@@ -24,7 +15,7 @@ class PracticeFeedbackRequest(BaseModel):
     question: str
     answer: str
 
-@app.post("/interview-prep")
+@router.post("/interview-prep")
 async def interview_prep(payload: InterviewPrepRequest):
     prompt = f"""
 You are an AI career coach helping someone prepare for an interview.
@@ -52,7 +43,7 @@ Provide:
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-@app.post("/interview-feedback")
+@router.post("/interview-feedback")
 async def interview_feedback(payload: PracticeFeedbackRequest):
     prompt = f"""
 You are an AI interview coach. Give helpful, specific feedback on this answer to the interview question below.
