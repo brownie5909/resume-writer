@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from pydantic import BaseModel
 import os
 from openai import AsyncOpenAI
@@ -12,38 +12,44 @@ class InterviewInput(BaseModel):
 
 @router.post("/interview-prep")
 async def interview_prep(payload: InterviewInput):
-    prompt = f"""You are a career coach helping someone prepare for a job interview.
-
-Company: {payload.company}
-Role: {payload.role}
-
-Return:
-1. A clear, structured interview preparation summary
-2. 6 likely interview questions — numbered clearly
-
-Format:
-Return the interview prep in markdown-style text.
-Then list the 6 likely questions on separate lines in this format:
-Q: [question]"""
-
     try:
         response = await client.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert interview coach. "
+                        "Always return a structured interview prep summary followed by exactly 6 clearly numbered questions."
+                        "\nFormat:\n"
+                        "## Interview Preparation\n"
+                        "(detailed prep summary here, using **bold** section headers)\n\n"
+                        "## Interview Questions\n"
+                        "Q1: ...\nQ2: ...\nQ3: ...\nQ4: ...\nQ5: ...\nQ6: ..."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Company: {payload.company}\nRole: {payload.role}"
+                }
+            ]
         )
-        raw_output = response.choices[0].message.content.strip()
 
-        # Extract questions from markdown-style output
-        lines = raw_output.splitlines()
-        questions = [line[3:].strip() for line in lines if line.startswith("Q: ")]
+        full_output = response.choices[0].message.content.strip()
 
-        # Remove questions from prep text
-        prep_text = "\n".join(line for line in lines if not line.startswith("Q: ")).strip()
+        # Split content by the Q1 marker
+        split_point = full_output.find("Q1:")
+        if split_point == -1:
+            return {"success": False, "error": "No questions found in AI response."}
+
+        prep = full_output[:split_point].strip()
+        questions_block = full_output[split_point:].strip()
+        questions = [line.strip() for line in questions_block.splitlines() if line.startswith("Q")]
 
         return {
             "success": True,
-            "prep": prep_text,
+            "prep": prep,
             "questions": questions
         }
 
