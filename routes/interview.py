@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-import os
 from openai import AsyncOpenAI
+import os
 
 router = APIRouter()
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -13,25 +13,21 @@ class InterviewInput(BaseModel):
 @router.post("/interview-prep")
 async def interview_prep(payload: InterviewInput):
     prompt = f"""
-You are a professional interview coach helping a candidate prepare for a job interview.
+You are a career coach helping someone prepare for an interview for the role of {payload.role} at {payload.company}.
 
-Company: {payload.company}
-Role: {payload.role}
+Return in this format:
+## Interview Preparation Summary
 
-Respond with:
-1. A short but useful interview preparation summary
-2. Then list exactly 6 likely interview questions, each starting with "Q#: "
+[1-2 paragraphs about the company, role, expectations, and strategies]
 
-Return your entire response in plain text (no markdown, no bullet points, no titles). Format like this:
+## Likely Interview Questions
 
-[Summary text line 1]
-[Summary text line 2]
-...
-
-Q1: First likely interview question
-Q2: Second likely interview question
-...
-Q6: Sixth likely interview question
+Q1: [question 1]  
+Q2: [question 2]  
+Q3: [question 3]  
+Q4: [question 4]  
+Q5: [question 5]  
+Q6: [question 6]
 """
 
     try:
@@ -40,23 +36,16 @@ Q6: Sixth likely interview question
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
         )
-        raw_output = response.choices[0].message.content.strip()
+        full_text = response.choices[0].message.content.strip()
 
-        # Parse out Q1–Q6 questions
-        lines = raw_output.splitlines()
-        questions = [line.split(":", 1)[1].strip() for line in lines if line.strip().lower().startswith("q") and ":" in line]
-
-        # Remaining lines are summary
-        prep_text = "\n".join([line for line in lines if not line.strip().lower().startswith("q")])
+        # Parse questions separately
+        lines = full_text.splitlines()
+        questions = [line.split(": ", 1)[1].strip() for line in lines if line.strip().startswith("Q") and ": " in line]
 
         return {
             "success": True,
-            "prep": prep_text.strip(),
+            "prep": full_text,
             "questions": questions
         }
-
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
