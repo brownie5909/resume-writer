@@ -56,20 +56,87 @@ TEMPLATES = {
         {% if cover_letter %}<h2>Cover Letter</h2><p>{{ cover_letter }}</p>{% endif %}
     </body></html>
     """,
-    "creative": """
-    <!DOCTYPE html>
-    <html>
-    <head><style>body { font-family: Helvetica, sans-serif; margin: 30px; color: #333; } h1 { font-size: 30px; color: #4CAF50; } h2 { font-size: 22px; color: #2196F3; margin-top:20px; } p { margin: 5px 0; white-space: pre-wrap; }</style></head>
-    <body>
+"creative": """
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, sans-serif;
+            color: #333;
+            margin: 40px;
+            padding: 0;
+            font-size: 14px;
+        }
+        .header {
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+            margin-bottom: 25px;
+        }
+        .header h1 {
+            font-size: 28px;
+            color: #4CAF50;
+            margin: 0;
+        }
+        .header p {
+            font-style: italic;
+            font-size: 14px;
+            margin: 5px 0 0;
+        }
+        h2 {
+            font-size: 18px;
+            color: #2196F3;
+            margin-top: 25px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 4px;
+        }
+        p {
+            margin: 5px 0 15px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+        .section {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
         <h1>{{ name }}</h1>
-        <p style="font-style: italic;">{{ email }} | {{ phone }}</p>
-        <h2>About Me</h2><p>{{ summary }}</p>
-        <h2>Experience</h2><p>{{ experience }}</p>
-        <h2>Education</h2><p>{{ education }}</p>
-        <h2>Skills</h2><p>{{ skills }}</p>
-        {% if cover_letter %}<h2>My Cover Letter</h2><p>{{ cover_letter }}</p>{% endif %}
-    </body></html>
-    """,
+        <p>{{ email }}{% if phone %} | {{ phone }}{% endif %}</p>
+    </div>
+
+    <div class="section">
+        <h2>About Me</h2>
+        <p>{{ summary }}</p>
+    </div>
+
+    <div class="section">
+        <h2>Experience</h2>
+        <p>{{ experience }}</p>
+    </div>
+
+    <div class="section">
+        <h2>Education</h2>
+        <p>{{ education }}</p>
+    </div>
+
+    <div class="section">
+        <h2>Skills</h2>
+        <p>{{ skills }}</p>
+    </div>
+
+    {% if cover_letter %}
+    <div class="section">
+        <h2>My Cover Letter</h2>
+        <p>{{ cover_letter }}</p>
+    </div>
+    {% endif %}
+</body>
+</html>
+"""
+
     "executive": """
     <!DOCTYPE html>
     <html>
