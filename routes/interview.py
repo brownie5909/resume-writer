@@ -1,33 +1,79 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from openai import AsyncOpenAI
 import os
+from openai import AsyncOpenAI
 
 router = APIRouter()
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Models
 class InterviewInput(BaseModel):
     company: str
     role: str
 
+class FeedbackInput(BaseModel):
+    question: str
+    answer: str
+
+# Interview prep route
 @router.post("/interview-prep")
 async def interview_prep(payload: InterviewInput):
     prompt = f"""
-You are a career coach helping someone prepare for an interview for the role of {payload.role} at {payload.company}.
+You are a career coach helping someone prepare for a job interview.
 
-Return in this format:
-## Interview Preparation Summary
+Company: {payload.company}
+Role: {payload.role}
 
-[1-2 paragraphs about the company, role, expectations, and strategies]
+Return the following sections in markdown format:
+## Interview Preparation
+1. Company Research
+2. Role Expectations
+3. STAR Method Reminder
+4. Smart Questions to Ask
+5. Any relevant industry notes
 
 ## Likely Interview Questions
+List 6 questions, one per line, each starting with:
+Q: [question]
+    """
 
-Q1: [question 1]  
-Q2: [question 2]  
-Q3: [question 3]  
-Q4: [question 4]  
-Q5: [question 5]  
-Q6: [question 6]
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+
+        raw_output = response.choices[0].message.content.strip()
+        lines = raw_output.splitlines()
+
+        questions = [line[3:].strip() for line in lines if line.startswith("Q: ")]
+        prep_text = "\n".join([line for line in lines if not line.startswith("Q: ")])
+
+        return {
+            "success": True,
+            "prep": prep_text,
+            "questions": questions
+        }
+
+    except Exception as e:
+        return { "success": False, "error": str(e) }
+
+
+# Feedback route
+@router.post("/interview-feedback")
+async def interview_feedback(payload: FeedbackInput):
+    prompt = f"""
+You are an interview coach reviewing a job candidate's answer.
+
+Question:
+{payload.question}
+
+Candidate's Answer:
+{payload.answer}
+
+Give specific, actionable feedback in 3–4 sentences.
+Use a friendly, supportive tone.
 """
 
     try:
@@ -36,16 +82,13 @@ Q6: [question 6]
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
         )
-        full_text = response.choices[0].message.content.strip()
 
-        # Parse questions separately
-        lines = full_text.splitlines()
-        questions = [line.split(": ", 1)[1].strip() for line in lines if line.strip().startswith("Q") and ": " in line]
+        feedback = response.choices[0].message.content.strip()
 
         return {
             "success": True,
-            "prep": full_text,
-            "questions": questions
+            "feedback": feedback
         }
+
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return { "success": False, "error": str(e) }
