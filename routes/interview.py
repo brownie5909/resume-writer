@@ -13,22 +13,25 @@ class InterviewInput(BaseModel):
 @router.post("/interview-prep")
 async def interview_prep(payload: InterviewInput):
     prompt = f"""
-You are a professional interview coach helping someone prepare for a job interview.
+You are a professional interview coach helping a candidate prepare for a job interview.
 
 Company: {payload.company}
 Role: {payload.role}
 
-Return:
-1. A brief summary of the company and role
-2. Key points the candidate should know (use bullets or short paragraphs)
-3. Then provide exactly 6 likely interview questions, in this exact format:
+Respond with:
+1. A short but useful interview preparation summary
+2. Then list exactly 6 likely interview questions, each starting with "Q#: "
 
-Q1: [question]
-Q2: [question]
+Return your entire response in plain text (no markdown, no bullet points, no titles). Format like this:
+
+[Summary text line 1]
+[Summary text line 2]
 ...
-Q6: [question]
 
-Do NOT add section titles or markdown. Return a clean plain text response.
+Q1: First likely interview question
+Q2: Second likely interview question
+...
+Q6: Sixth likely interview question
 """
 
     try:
@@ -39,14 +42,16 @@ Do NOT add section titles or markdown. Return a clean plain text response.
         )
         raw_output = response.choices[0].message.content.strip()
 
-        # Separate questions
+        # Parse out Q1–Q6 questions
         lines = raw_output.splitlines()
-        questions = [line.split(":", 1)[1].strip() for line in lines if line.startswith("Q")]
-        prep_text = "\n".join([line for line in lines if not line.startswith("Q")]).strip()
+        questions = [line.split(":", 1)[1].strip() for line in lines if line.strip().lower().startswith("q") and ":" in line]
+
+        # Remaining lines are summary
+        prep_text = "\n".join([line for line in lines if not line.strip().lower().startswith("q")])
 
         return {
             "success": True,
-            "prep": prep_text,
+            "prep": prep_text.strip(),
             "questions": questions
         }
 
