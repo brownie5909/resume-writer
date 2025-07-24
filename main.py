@@ -135,7 +135,7 @@ TEMPLATES = {
     {% endif %}
 </body>
 </html>
-"""
+""",
 
     "executive": """
     <!DOCTYPE html>
