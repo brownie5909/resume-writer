@@ -11,6 +11,7 @@ import openai
 from jinja2 import Template
 from weasyprint import HTML
 import re
+import json
 
 app = FastAPI()
 
@@ -84,7 +85,7 @@ Generate a {style} resume {ats_note} in structured JSON format based on the foll
     ai_output = response.choices[0].message.content.strip()
 
     try:
-        parsed = eval(ai_output) if ai_output.startswith("{") else {}
+        parsed = json.loads(ai_output) if ai_output.startswith("{") else {}
     except:
         parsed = {}
 
@@ -97,21 +98,21 @@ Generate a {style} resume {ats_note} in structured JSON format based on the foll
             experience += f"  {job.get('responsibilities', '')}\n"
     else:
         experience = exp_data
-    
+
     # Format education
     edu_data = parsed.get("education", "")
     if isinstance(edu_data, dict):
         education = f"{edu_data.get('degree', '')}, {edu_data.get('school', '')}"
     else:
         education = edu_data
-    
+
     # Format skills
     skills_data = parsed.get("skills", "")
     if isinstance(skills_data, list):
         skills = ", ".join(skills_data)
     else:
         skills = skills_data
-    
+
     sections = {
         "name": data.get("full_name", ""),
         "email": data.get("email", ""),
@@ -122,7 +123,6 @@ Generate a {style} resume {ats_note} in structured JSON format based on the foll
         "skills": skills,
         "cover_letter": parsed.get("cover_letter", "") if generate_cover_letter else ""
     }
-
 
     template_html = TEMPLATES.get(template_choice, TEMPLATES["default"])
     html = Template(template_html).render(**sections)
@@ -135,7 +135,7 @@ Generate a {style} resume {ats_note} in structured JSON format based on the foll
 
     download_url = f"https://resume-writer.onrender.com/download-resume/{pdf_id}"
 
-    return JSONResponse({"resume_text": ai_output, "pdf_url": download_url})
+    return JSONResponse({"resume_text": json.dumps(parsed), "pdf_url": download_url})
 
 @app.get("/download-resume/{pdf_id}")
 async def download_resume(pdf_id: str):
