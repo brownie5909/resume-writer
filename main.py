@@ -88,16 +88,41 @@ Generate a {style} resume {ats_note} in structured JSON format based on the foll
     except:
         parsed = {}
 
+    # Format experience
+    exp_data = parsed.get("experience", data.get("responsibilities", ""))
+    if isinstance(exp_data, list):
+        experience = ""
+        for job in exp_data:
+            experience += f"- {job.get('job_title', '')} at {job.get('company', '')} ({job.get('years_worked', '')} yrs)\n"
+            experience += f"  {job.get('responsibilities', '')}\n"
+    else:
+        experience = exp_data
+    
+    # Format education
+    edu_data = parsed.get("education", "")
+    if isinstance(edu_data, dict):
+        education = f"{edu_data.get('degree', '')}, {edu_data.get('school', '')}"
+    else:
+        education = edu_data
+    
+    # Format skills
+    skills_data = parsed.get("skills", "")
+    if isinstance(skills_data, list):
+        skills = ", ".join(skills_data)
+    else:
+        skills = skills_data
+    
     sections = {
         "name": data.get("full_name", ""),
         "email": data.get("email", ""),
         "phone": data.get("phone", ""),
         "summary": parsed.get("summary", data.get("summary", "")),
-        "experience": parsed.get("experience", data.get("responsibilities", "")),
-        "education": parsed.get("education", f"{data.get('degree', '')} - {data.get('school', '')}"),
-        "skills": parsed.get("skills", data.get("skills", "")),
+        "experience": experience,
+        "education": education,
+        "skills": skills,
         "cover_letter": parsed.get("cover_letter", "") if generate_cover_letter else ""
     }
+
 
     template_html = TEMPLATES.get(template_choice, TEMPLATES["default"])
     html = Template(template_html).render(**sections)
