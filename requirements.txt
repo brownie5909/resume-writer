@@ -4,3 +4,4 @@ weasyprint
 jinja2
 openai
 python-dotenv
+python-multipart
