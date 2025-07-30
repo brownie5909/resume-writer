@@ -11,8 +11,8 @@ from typing import Optional
 
 router = APIRouter()
 
-# Initialize OpenAI client
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Initialize OpenAI client - FIXED VERSION
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @router.post("/analyze-resume")
 async def analyze_resume(
@@ -30,8 +30,12 @@ async def analyze_resume(
     #     raise HTTPException(status_code=403, detail="Premium subscription required")
     
     try:
+        print(f"🔬 Starting analysis for file: {file.filename}")
+        print(f"🎯 Target role: {target_role}")
+        
         # Extract text from uploaded file
         resume_text = await extract_text_from_file(file)
+        print(f"📄 Extracted {len(resume_text)} characters")
         
         if not resume_text or len(resume_text.strip()) < 100:
             return JSONResponse(
@@ -40,10 +44,14 @@ async def analyze_resume(
             )
         
         # Analyze the resume with AI
+        print("🤖 Starting AI analysis...")
         analysis_result = await analyze_resume_with_ai(resume_text, target_role)
+        print("✅ AI analysis completed")
         
         # Generate improved version
+        print("🚀 Generating improved resume...")
         improved_resume = await generate_improved_resume(resume_text, target_role, analysis_result)
+        print("✅ Improved resume generated")
         
         return JSONResponse({
             "success": True,
@@ -54,7 +62,7 @@ async def analyze_resume(
         })
         
     except Exception as e:
-        print(f"Resume analysis error: {str(e)}")
+        print(f"❌ Resume analysis error: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": f"Analysis failed: {str(e)}"}
@@ -108,232 +116,352 @@ def extract_docx_text(content: bytes) -> str:
         raise ValueError(f"DOCX extraction failed: {str(e)}")
 
 async def analyze_resume_with_ai(resume_text: str, target_role: Optional[str] = None) -> dict:
-    """Use AI to analyze the resume and provide detailed feedback"""
+    """Use AI to analyze the resume and provide detailed feedback - FIXED VERSION"""
     
     role_context = f" for a {target_role} position" if target_role else ""
     
+    # Simplified analysis prompt that's more reliable
     analysis_prompt = f"""
-You are an expert resume reviewer and career coach. Analyze this resume{role_context} and provide a comprehensive evaluation.
+Analyze this resume{role_context} and provide specific, actionable feedback.
 
 Resume Text:
-{resume_text}
+{resume_text[:3000]}  
 
-Provide your analysis in the following JSON format:
-{{
-    "overall_score": [number from 0-100],
-    "ats_score": [number from 0-100],
-    "strengths": ["strength 1", "strength 2", "strength 3"],
-    "weaknesses": ["weakness 1", "weakness 2", "weakness 3"],
-    "keyword_analysis": {{
-        "missing_keywords": ["keyword1", "keyword2"],
-        "present_keywords": ["keyword1", "keyword2"],
-        "keyword_density": [number from 0-100]
-    }},
-    "sections_analysis": {{
-        "contact_info": {{"score": [0-100], "feedback": "detailed feedback"}},
-        "summary": {{"score": [0-100], "feedback": "detailed feedback"}},
-        "experience": {{"score": [0-100], "feedback": "detailed feedback"}},
-        "education": {{"score": [0-100], "feedback": "detailed feedback"}},
-        "skills": {{"score": [0-100], "feedback": "detailed feedback"}}
-    }},
-    "formatting_score": [number from 0-100],
-    "specific_improvements": [
-        "Specific actionable improvement 1",
-        "Specific actionable improvement 2",
-        "Specific actionable improvement 3"
-    ],
-    "ats_recommendations": [
-        "ATS improvement 1",
-        "ATS improvement 2"
-    ]
-}}
+Provide analysis in this exact format:
 
-Focus on:
-1. ATS compatibility and keyword optimization{" for " + target_role if target_role else ""}
-2. Content quality and achievement quantification
-3. Professional formatting and structure
-4. Missing sections or information
-5. Specific, actionable improvements
+OVERALL_SCORE: [number 0-100]
+ATS_SCORE: [number 0-100] 
+FORMATTING_SCORE: [number 0-100]
+
+STRENGTHS:
+- [strength 1]
+- [strength 2] 
+- [strength 3]
+
+WEAKNESSES:
+- [weakness 1]
+- [weakness 2]
+- [weakness 3]
+
+MISSING_KEYWORDS: [keyword1, keyword2, keyword3]
+PRESENT_KEYWORDS: [keyword1, keyword2, keyword3]
+
+SPECIFIC_IMPROVEMENTS:
+1. [improvement 1]
+2. [improvement 2] 
+3. [improvement 3]
+
+ATS_RECOMMENDATIONS:
+1. [ats tip 1]
+2. [ats tip 2]
+
+SECTION_FEEDBACK:
+Contact: [score]/100 - [feedback]
+Summary: [score]/100 - [feedback]  
+Experience: [score]/100 - [feedback]
+Education: [score]/100 - [feedback]
+Skills: [score]/100 - [feedback]
 """
 
     try:
-        client = openai.OpenAI()
-        response = await client.chat.completions.acreate(
+        print("📤 Sending request to OpenAI...")
+        
+        # Use synchronous client - this was the issue!
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are an expert resume reviewer with 15+ years of experience helping professionals optimize their resumes for ATS systems and hiring managers."},
+                {"role": "system", "content": "You are an expert resume reviewer with 15+ years of experience. Provide specific, actionable feedback in the exact format requested."},
                 {"role": "user", "content": analysis_prompt}
             ],
             temperature=0.3,
-            max_tokens=2000
+            max_tokens=1500
         )
         
         ai_response = response.choices[0].message.content
+        print("📥 Received AI response")
         
-        # Try to parse JSON response
-        try:
-            # Extract JSON from response if it's wrapped in markdown
-            if "```json" in ai_response:
-                json_start = ai_response.find("```json") + 7
-                json_end = ai_response.find("```", json_start)
-                ai_response = ai_response[json_start:json_end]
-            elif "```" in ai_response:
-                json_start = ai_response.find("```") + 3
-                json_end = ai_response.find("```", json_start)
-                ai_response = ai_response[json_start:json_end]
+        # Parse the structured response
+        analysis_data = parse_structured_analysis(ai_response)
+        
+        # Add keyword density calculation
+        if analysis_data.get('keyword_analysis'):
+            missing_count = len(analysis_data['keyword_analysis'].get('missing_keywords', []))
+            present_count = len(analysis_data['keyword_analysis'].get('present_keywords', []))
+            total_keywords = missing_count + present_count
             
-            analysis_data = json.loads(ai_response.strip())
-            return analysis_data
-            
-        except json.JSONDecodeError:
-            # If JSON parsing fails, create structured response from text
-            return parse_analysis_from_text(ai_response)
-            
+            if total_keywords > 0:
+                density = int((present_count / total_keywords) * 100)
+                analysis_data['keyword_analysis']['keyword_density'] = density
+        
+        return analysis_data
+        
     except Exception as e:
-        print(f"AI analysis error: {str(e)}")
-        return get_fallback_analysis()
+        print(f"❌ AI analysis error: {str(e)}")
+        # Return enhanced fallback with some real analysis
+        return get_enhanced_fallback_analysis(resume_text, target_role)
+
+def parse_structured_analysis(ai_response: str) -> dict:
+    """Parse the structured AI response"""
+    
+    try:
+        # Extract scores
+        overall_score = extract_score(ai_response, "OVERALL_SCORE")
+        ats_score = extract_score(ai_response, "ATS_SCORE") 
+        formatting_score = extract_score(ai_response, "FORMATTING_SCORE")
+        
+        # Extract lists
+        strengths = extract_list(ai_response, "STRENGTHS:", "WEAKNESSES:")
+        weaknesses = extract_list(ai_response, "WEAKNESSES:", "MISSING_KEYWORDS:")
+        
+        # Extract keywords
+        missing_keywords = extract_keywords(ai_response, "MISSING_KEYWORDS:")
+        present_keywords = extract_keywords(ai_response, "PRESENT_KEYWORDS:")
+        
+        # Extract improvements
+        improvements = extract_numbered_list(ai_response, "SPECIFIC_IMPROVEMENTS:")
+        ats_recommendations = extract_numbered_list(ai_response, "ATS_RECOMMENDATIONS:")
+        
+        # Extract section feedback
+        sections = parse_section_feedback(ai_response)
+        
+        return {
+            "overall_score": overall_score,
+            "ats_score": ats_score,
+            "formatting_score": formatting_score,
+            "strengths": strengths,
+            "weaknesses": weaknesses,
+            "keyword_analysis": {
+                "missing_keywords": missing_keywords,
+                "present_keywords": present_keywords,
+                "keyword_density": 70  # Will be calculated later
+            },
+            "sections_analysis": sections,
+            "specific_improvements": improvements,
+            "ats_recommendations": ats_recommendations
+        }
+        
+    except Exception as e:
+        print(f"⚠️ Parsing error: {str(e)}")
+        return get_enhanced_fallback_analysis("", "")
+
+def extract_score(text: str, keyword: str) -> int:
+    """Extract score from text"""
+    try:
+        pattern = rf"{keyword}:\s*(\d+)"
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+    except:
+        pass
+    return 75  # Default score
+
+def extract_list(text: str, start_keyword: str, end_keyword: str) -> list:
+    """Extract bullet point list between keywords"""
+    try:
+        start_pos = text.find(start_keyword)
+        end_pos = text.find(end_keyword)
+        
+        if start_pos == -1:
+            return []
+            
+        if end_pos == -1:
+            end_pos = len(text)
+            
+        section = text[start_pos + len(start_keyword):end_pos]
+        
+        items = []
+        for line in section.split('\n'):
+            line = line.strip()
+            if line.startswith('-') or line.startswith('•'):
+                items.append(line[1:].strip())
+        
+        return items[:5]  # Limit to 5 items
+        
+    except:
+        return []
+
+def extract_keywords(text: str, keyword: str) -> list:
+    """Extract comma-separated keywords"""
+    try:
+        start_pos = text.find(keyword)
+        if start_pos == -1:
+            return []
+            
+        # Get the line after the keyword
+        start_pos += len(keyword)
+        end_pos = text.find('\n', start_pos)
+        if end_pos == -1:
+            end_pos = start_pos + 200  # Max length
+            
+        line = text[start_pos:end_pos].strip()
+        
+        # Remove brackets and split by comma
+        line = line.strip('[]{}()')
+        keywords = [k.strip() for k in line.split(',') if k.strip()]
+        
+        return keywords[:8]  # Limit to 8 keywords
+        
+    except:
+        return []
+
+def extract_numbered_list(text: str, keyword: str) -> list:
+    """Extract numbered list items"""
+    try:
+        start_pos = text.find(keyword)
+        if start_pos == -1:
+            return []
+            
+        # Find next section or end
+        next_section = text.find('\n\n', start_pos + len(keyword))
+        if next_section == -1:
+            next_section = len(text)
+            
+        section = text[start_pos + len(keyword):next_section]
+        
+        items = []
+        for line in section.split('\n'):
+            line = line.strip()
+            if re.match(r'^\d+\.', line):
+                items.append(re.sub(r'^\d+\.\s*', '', line))
+        
+        return items[:5]  # Limit to 5 items
+        
+    except:
+        return []
+
+def parse_section_feedback(text: str) -> dict:
+    """Parse section-by-section feedback"""
+    sections = {}
+    
+    section_names = ['Contact', 'Summary', 'Experience', 'Education', 'Skills']
+    
+    for section in section_names:
+        try:
+            pattern = rf"{section}:\s*(\d+)/100\s*-\s*([^\n]+)"
+            match = re.search(pattern, text, re.IGNORECASE)
+            
+            if match:
+                score = int(match.group(1))
+                feedback = match.group(2).strip()
+            else:
+                score = 75
+                feedback = f"{section} section appears standard"
+                
+            sections[section.lower() + '_info' if section == 'Contact' else section.lower()] = {
+                "score": score,
+                "feedback": feedback
+            }
+        except:
+            sections[section.lower() + '_info' if section == 'Contact' else section.lower()] = {
+                "score": 75,
+                "feedback": f"{section} section needs review"
+            }
+    
+    return sections
 
 async def generate_improved_resume(resume_text: str, target_role: Optional[str], analysis: dict) -> str:
-    """Generate an improved version of the resume based on analysis"""
+    """Generate an improved version of the resume - FIXED VERSION"""
     
-    role_context = f" optimized for {target_role} positions" if target_role else ""
+    role_context = f" for {target_role} positions" if target_role else ""
     
+    # Simplified improvement prompt
     improvement_prompt = f"""
-Based on the resume analysis, create an improved version of this resume{role_context}.
+Improve this resume{role_context} based on the analysis. Keep all original information but enhance presentation.
 
 Original Resume:
-{resume_text}
+{resume_text[:2000]}
 
-Key improvements to make:
-{json.dumps(analysis.get('specific_improvements', []), indent=2)}
-
-ATS improvements needed:
-{json.dumps(analysis.get('ats_recommendations', []), indent=2)}
-
-Missing keywords to include:
-{json.dumps(analysis.get('keyword_analysis', {}).get('missing_keywords', []), indent=2)}
+Key Issues to Fix:
+{chr(10).join(analysis.get('specific_improvements', [])[:3])}
 
 Create an improved version that:
-1. Maintains all original information and experience
-2. Improves formatting and structure
-3. Adds missing keywords naturally
-4. Quantifies achievements where possible
-5. Uses strong action verbs
-6. Follows ATS-friendly formatting
-7. Includes a compelling professional summary if missing
+1. Keeps all original experience and information
+2. Uses stronger action verbs
+3. Adds quantifiable achievements where possible
+4. Improves formatting and structure
+5. Makes it more ATS-friendly
 
-Return only the improved resume text, formatted professionally.
+Return only the improved resume text.
 """
 
     try:
-        client = openai.OpenAI()
-        response = await client.chat.completions.acreate(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are an expert resume writer who creates ATS-optimized, professional resumes that help candidates get interviews."},
+                {"role": "system", "content": "You are an expert resume writer. Improve resumes while keeping all original information."},
                 {"role": "user", "content": improvement_prompt}
             ],
             temperature=0.4,
-            max_tokens=2000
+            max_tokens=1500
         )
         
         improved_resume = response.choices[0].message.content.strip()
         return improved_resume
         
     except Exception as e:
-        print(f"Resume improvement error: {str(e)}")
-        return "Unable to generate improved version. Please try again."
+        print(f"❌ Resume improvement error: {str(e)}")
+        return f"Resume analysis completed successfully. Improved version generation temporarily unavailable.\n\nOriginal resume content preserved:\n\n{resume_text[:1000]}..."
 
-def parse_analysis_from_text(text: str) -> dict:
-    """Parse analysis from plain text if JSON parsing fails"""
+def get_enhanced_fallback_analysis(resume_text: str, target_role: Optional[str]) -> dict:
+    """Enhanced fallback with basic text analysis"""
     
-    # Basic text parsing for fallback
-    overall_score = 75  # Default score
+    # Do some basic text analysis
+    word_count = len(resume_text.split())
+    has_email = '@' in resume_text
+    has_phone = any(char.isdigit() for char in resume_text)
+    has_experience = any(word in resume_text.lower() for word in ['experience', 'worked', 'managed', 'led'])
+    has_education = any(word in resume_text.lower() for word in ['university', 'college', 'degree', 'bachelor', 'master'])
+    has_skills = any(word in resume_text.lower() for word in ['skills', 'proficient', 'experienced'])
     
-    # Try to extract scores from text
-    score_pattern = r'(\d+)/100|(\d+)%|score[:\s]*(\d+)'
-    scores = re.findall(score_pattern, text.lower())
-    if scores:
-        overall_score = int([s for s in scores[0] if s][0])
+    # Calculate basic scores
+    overall_score = 60
+    if has_email: overall_score += 5
+    if has_phone: overall_score += 5  
+    if has_experience: overall_score += 10
+    if has_education: overall_score += 10
+    if has_skills: overall_score += 5
+    if word_count > 200: overall_score += 5
     
     return {
-        "overall_score": overall_score,
-        "ats_score": max(60, overall_score - 10),
+        "overall_score": min(overall_score, 85),
+        "ats_score": max(overall_score - 10, 50),
+        "formatting_score": overall_score - 5,
         "strengths": [
-            "Professional experience documented",
-            "Clear contact information",
-            "Relevant skills listed"
+            f"Resume contains {word_count} words showing good detail" if word_count > 150 else "Resume structure detected",
+            "Contact information present" if has_email else "Readable format confirmed",
+            "Professional experience documented" if has_experience else "Content successfully processed"
         ],
         "weaknesses": [
-            "Could benefit from more quantified achievements",
-            "May need keyword optimization",
-            "Consider adding a professional summary"
+            "AI analysis temporarily unavailable for detailed feedback",
+            "Please try again for comprehensive analysis",
+            "Basic structure analysis completed"
         ],
         "keyword_analysis": {
             "missing_keywords": ["leadership", "results-driven", "collaborative"],
-            "present_keywords": ["experience", "skills", "education"],
+            "present_keywords": ["experience", "skills", "professional"],
             "keyword_density": 65
         },
         "sections_analysis": {
-            "contact_info": {"score": 85, "feedback": "Contact information is clear and professional"},
-            "summary": {"score": 50, "feedback": "Consider adding a compelling professional summary"},
-            "experience": {"score": 75, "feedback": "Good experience documentation, add more quantified achievements"},
-            "education": {"score": 80, "feedback": "Education section is well formatted"},
-            "skills": {"score": 70, "feedback": "Skills are relevant, consider grouping by category"}
+            "contact_info": {"score": 85 if has_email else 60, "feedback": "Contact information detected" if has_email else "Contact info needs verification"},
+            "summary": {"score": 65, "feedback": "Summary section analysis pending"},
+            "experience": {"score": 80 if has_experience else 50, "feedback": "Experience section found" if has_experience else "Experience section needs review"},
+            "education": {"score": 75 if has_education else 60, "feedback": "Education background present" if has_education else "Education section standard"},
+            "skills": {"score": 75 if has_skills else 65, "feedback": "Skills section identified" if has_skills else "Skills section detected"}
         },
-        "formatting_score": 80,
         "specific_improvements": [
-            "Add quantified achievements (percentages, dollar amounts, etc.)",
-            "Include a professional summary at the top",
-            "Use more action verbs (achieved, implemented, optimized)",
-            "Add relevant industry keywords",
-            "Ensure consistent formatting throughout"
+            "Add quantified achievements with specific numbers and percentages",
+            "Include a compelling professional summary at the top",
+            "Use stronger action verbs (achieved, implemented, optimized)",
+            f"Optimize for {target_role} keywords" if target_role else "Add relevant industry keywords"
         ],
         "ats_recommendations": [
             "Use standard section headers (Experience, Education, Skills)",
-            "Avoid tables, columns, and graphics that ATS cannot read",
-            "Include keywords from the job description naturally in content"
+            "Maintain consistent formatting throughout",
+            "Include relevant keywords naturally in content"
         ]
     }
 
-def get_fallback_analysis() -> dict:
-    """Fallback analysis if AI completely fails"""
-    return {
-        "overall_score": 70,
-        "ats_score": 65,
-        "strengths": [
-            "Resume successfully uploaded and processed",
-            "Readable format detected",
-            "Standard resume structure identified"
-        ],
-        "weaknesses": [
-            "Detailed analysis temporarily unavailable",
-            "Please try again for complete feedback"
-        ],
-        "keyword_analysis": {
-            "missing_keywords": ["Analysis pending"],
-            "present_keywords": ["Content detected"],
-            "keyword_density": 50
-        },
-        "sections_analysis": {
-            "contact_info": {"score": 70, "feedback": "Analysis in progress"},
-            "summary": {"score": 70, "feedback": "Analysis in progress"},
-            "experience": {"score": 70, "feedback": "Analysis in progress"},
-            "education": {"score": 70, "feedback": "Analysis in progress"},
-            "skills": {"score": 70, "feedback": "Analysis in progress"}
-        },
-        "formatting_score": 70,
-        "specific_improvements": [
-            "Detailed analysis temporarily unavailable",
-            "Please try again for specific recommendations"
-        ],
-        "ats_recommendations": [
-            "Use standard section headers",
-            "Maintain clean, simple formatting"
-        ]
-    }
-
-# Health check for resume analysis service
+# Health check
 @router.get("/resume-analysis/health")
 async def resume_analysis_health():
     return {"status": "healthy", "service": "resume-analysis"}
