@@ -4,9 +4,24 @@ import os
 import openai
 from typing import Optional
 from .resume_analysis import extract_text_from_file  # Import existing function
+from .user_management import require_feature_access
+
+
 
 router = APIRouter()
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Update the analyze endpoint:
+@router.post("/analyze-cover-letter")
+async def analyze_cover_letter(
+    file: UploadFile = File(...),
+    target_role: Optional[str] = Form(None),
+    document_type: Optional[str] = Form("cover_letter"),
+    user_id: Optional[str] = Form(None),
+    user_tier = Depends(require_feature_access("cover_letter_analysis"))
+):
+    # Rest of function stays the same
+
 
 @router.post("/analyze-cover-letter")
 async def analyze_cover_letter(
