@@ -16,7 +16,8 @@ async def analyze_cover_letter(
     file: UploadFile = File(...),
     target_role: Optional[str] = Form(None),
     document_type: Optional[str] = Form("cover_letter"),
-    user_id: Optional[str] = Form(None)
+    user_id: Optional[str] = Form(None),
+    user_tier = Depends(require_feature_access("cover_letter_analysis"))
 ):
     """
     Analyze an uploaded cover letter and provide detailed feedback
