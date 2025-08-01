@@ -5,6 +5,8 @@ import openai
 from typing import Optional
 import re
 from .resume_analysis import extract_text_from_file
+from .user_management import require_feature_access
+from fastapi import Depends
 
 router = APIRouter()
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
