@@ -5,7 +5,7 @@ import openai
 from typing import Optional
 import re
 from .resume_analysis import extract_text_from_file
-from .user_management import require_feature_access
+from .user_management import require_feature_access_auth
 from fastapi import Depends
 
 router = APIRouter()
@@ -17,7 +17,7 @@ async def analyze_cover_letter(
     target_role: Optional[str] = Form(None),
     document_type: Optional[str] = Form("cover_letter"),
     user_id: Optional[str] = Form(None),
-    user_tier = Depends(require_feature_access("cover_letter_analysis"))
+    user_tier = Depends(require_feature_access_auth("cover_letter_analysis"))
 ):
     """
     Analyze an uploaded cover letter and provide detailed feedback
