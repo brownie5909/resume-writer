@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer
 from enum import Enum
 from typing import Optional
 import os
+from fastapi import Form
 
 router = APIRouter()
 security = HTTPBearer(auto_error=False)
@@ -66,7 +67,7 @@ def check_feature_access(feature_name: str, user_tier: UserTier = UserTier.FREE)
 
 def require_feature_access(feature_name: str):
     """Dependency to check feature access - returns user tier if access granted"""
-    def check_access(user_id: Optional[str] = None):
+    def check_access(user_id: Optional[str] = Form(None)):  # Add Form(None) here
         user_tier = get_user_tier(user_id)
         if not check_feature_access(feature_name, user_tier):
             raise HTTPException(
