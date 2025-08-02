@@ -50,6 +50,34 @@ PDF_EXPIRY_HOURS = 24
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# Add this to main.py after imports but before any functions
+TIER_LIMITS = {
+    "free": {
+        "pdf_downloads_per_month": 1,
+        "features": ["resume_builder", "company_research"],
+        "description": "Basic resume builder + Company research"
+    },
+    "premium": {
+        "pdf_downloads_per_month": -1,  # Unlimited
+        "features": [
+            "resume_builder", "company_research", "resume_analysis", 
+            "cover_letter_analysis", "linkedin_optimization", "interview_practice",
+            "ats_scoring", "job_customization"
+        ],
+        "description": "$19/month - AI Analysis + Cover Letters + Interview Prep"
+    },
+    "professional": {
+        "pdf_downloads_per_month": -1,  # Unlimited
+        "features": [
+            "resume_builder", "company_research", "resume_analysis", 
+            "cover_letter_analysis", "linkedin_optimization", "interview_practice",
+            "ats_scoring", "job_customization", "mock_interview_simulator", 
+            "career_path_analysis", "salary_benchmarking", "skills_gap_analysis"
+        ],
+        "description": "$39/month - Everything + AI Mock Interviews + Career Analysis"
+    }
+}
+
 # Your existing templates (keeping all the same)
 TEMPLATES = {
     "default": """
