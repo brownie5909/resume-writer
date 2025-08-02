@@ -549,15 +549,23 @@ def track_pdf_usage(user_id: str):
 
 def check_pdf_download_limit(user_id: str) -> bool:
     """Check if user can download more PDFs this month"""
-    from routes.user_management import get_db
+    from routes.user_management import get_db, get_user_tier_enhanced, TIER_LIMITS
     from datetime import datetime
     
     # Get user tier
     user_tier = get_user_tier_enhanced(user_id)
-    tier_limits = TIER_LIMITS[user_tier]
+    
+    # Simple tier limits
+    tier_limits = {
+        "free": {"pdf_downloads_per_month": 1},
+        "premium": {"pdf_downloads_per_month": -1},
+        "professional": {"pdf_downloads_per_month": -1}
+    }
+    
+    limit = tier_limits.get(user_tier.value, {"pdf_downloads_per_month": 1})["pdf_downloads_per_month"]
     
     # Unlimited downloads for premium users
-    if tier_limits["pdf_downloads_per_month"] == -1:
+    if limit == -1:
         return True
     
     # Check current month usage
@@ -573,8 +581,8 @@ def check_pdf_download_limit(user_id: str) -> bool:
         result = cursor.fetchone()
         current_usage = result[0] if result else 0
         
-        return current_usage < tier_limits["pdf_downloads_per_month"]
-
+        return current_usage < limit
+        
 def parse_ai_sections(ai_output: str, data: Dict[str, Any]) -> Dict[str, str]:
     """Enhanced section parsing with better fallbacks (keeping your existing function)"""
     sections = {
