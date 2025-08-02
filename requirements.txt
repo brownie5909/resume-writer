@@ -8,3 +8,7 @@ python-multipart
 PyPDF2
 python-docx
 aiofiles
+passlib[bcrypt]
+python-jose[cryptography]
+pydantic[email]
+email-validator

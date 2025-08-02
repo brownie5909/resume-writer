@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Dict, Any
@@ -10,33 +10,47 @@ from jinja2 import Template
 from weasyprint import HTML, CSS
 from datetime import datetime, timedelta
 import json
+
+# Import your existing routes
 from routes.interview import router as interview_router
 from routes.resume_analysis import router as resume_analysis_router
 from routes.cover_letter import router as cover_letter_router
-from routes.user_management import router as user_management_router
 
-app = FastAPI()
+# Import the new enhanced user management
+from routes.user_management import (
+    router as user_management_router, 
+    get_current_user,
+    require_feature_access_auth,
+    get_user_tier_enhanced
+)
+
+app = FastAPI(
+    title="Hire Ready API",
+    description="AI-powered job application tools with user authentication",
+    version="2.0.0"
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Configure for your domain in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(interview_router)
-app.include_router(resume_analysis_router)
-app.include_router(cover_letter_router)
-app.include_router(user_management_router)
+# Include all routers
+app.include_router(user_management_router, prefix="/api", tags=["Authentication & Users"])
+app.include_router(interview_router, prefix="/api", tags=["Interview"])
+app.include_router(resume_analysis_router, prefix="/api", tags=["Resume Analysis"])
+app.include_router(cover_letter_router, prefix="/api", tags=["Cover Letter"])
 
-# Enhanced PDF storage with expiration
+# Enhanced PDF storage with expiration and user association
 pdf_store = {}
 PDF_EXPIRY_HOURS = 24
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Enhanced templates with better styling and structure
+# Your existing templates (keeping all the same)
 TEMPLATES = {
     "default": """
     <!DOCTYPE html>
@@ -497,8 +511,72 @@ def clean_pdf_store():
     for key in expired_keys:
         del pdf_store[key]
 
+def track_pdf_usage(user_id: str):
+    """Track PDF download usage for the user"""
+    from routes.user_management import get_db
+    import uuid
+    from datetime import datetime
+    
+    current_month = datetime.now().strftime("%Y-%m")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Get or create usage record
+        cursor.execute("""
+            SELECT usage_count FROM usage_tracking 
+            WHERE user_id = ? AND feature_name = 'pdf_downloads' AND month_year = ?
+        """, (user_id, current_month))
+        
+        result = cursor.fetchone()
+        
+        if result:
+            # Update existing record
+            new_count = result[0] + 1
+            cursor.execute("""
+                UPDATE usage_tracking 
+                SET usage_count = ?, last_reset = CURRENT_TIMESTAMP
+                WHERE user_id = ? AND feature_name = 'pdf_downloads' AND month_year = ?
+            """, (new_count, user_id, current_month))
+        else:
+            # Create new record
+            cursor.execute("""
+                INSERT INTO usage_tracking (usage_id, user_id, feature_name, usage_count, month_year)
+                VALUES (?, ?, ?, ?, ?)
+            """, (str(uuid.uuid4()), user_id, 'pdf_downloads', 1, current_month))
+        
+        conn.commit()
+
+def check_pdf_download_limit(user_id: str) -> bool:
+    """Check if user can download more PDFs this month"""
+    from routes.user_management import get_db
+    from datetime import datetime
+    
+    # Get user tier
+    user_tier = get_user_tier_enhanced(user_id)
+    tier_limits = TIER_LIMITS[user_tier]
+    
+    # Unlimited downloads for premium users
+    if tier_limits["pdf_downloads_per_month"] == -1:
+        return True
+    
+    # Check current month usage
+    current_month = datetime.now().strftime("%Y-%m")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT usage_count FROM usage_tracking 
+            WHERE user_id = ? AND feature_name = 'pdf_downloads' AND month_year = ?
+        """, (user_id, current_month))
+        
+        result = cursor.fetchone()
+        current_usage = result[0] if result else 0
+        
+        return current_usage < tier_limits["pdf_downloads_per_month"]
+
 def parse_ai_sections(ai_output: str, data: Dict[str, Any]) -> Dict[str, str]:
-    """Enhanced section parsing with better fallbacks"""
+    """Enhanced section parsing with better fallbacks (keeping your existing function)"""
     sections = {
         "name": data.get("full_name", ""),
         "email": data.get("email", ""),
@@ -570,8 +648,9 @@ def parse_ai_sections(ai_output: str, data: Dict[str, Any]) -> Dict[str, str]:
     
     return sections
 
-@app.post("/generate-resume")
-async def generate_resume(request: Request):
+@app.post("/api/generate-resume")
+async def generate_resume(request: Request, current_user: dict = Depends(get_current_user)):
+    """Enhanced resume generation with user authentication and usage tracking"""
     try:
         body = await request.json()
     except Exception:
@@ -583,6 +662,17 @@ async def generate_resume(request: Request):
 
     # Clean expired PDFs
     clean_pdf_store()
+
+    # Check PDF download limit for this user
+    if not check_pdf_download_limit(current_user["user_id"]):
+        user_tier = get_user_tier_enhanced(current_user["user_id"])
+        limit = TIER_LIMITS[user_tier]["pdf_downloads_per_month"]
+        return JSONResponse(status_code=403, content={
+            "error": f"Monthly PDF download limit reached ({limit} downloads)",
+            "upgrade_required": True,
+            "current_tier": user_tier.value,
+            "upgrade_url": "/pricing"
+        })
 
     # Extract data
     data = body.get("data")
@@ -677,16 +767,24 @@ Skills:
         pdf_store[pdf_id] = {
             'data': pdf_bytes.getvalue(),
             'created_at': datetime.now(),
-            'filename': f"resume_{data.get('full_name', 'user')}_{template_choice}.pdf"
+            'filename': f"resume_{data.get('full_name', 'user')}_{template_choice}.pdf",
+            'user_id': current_user["user_id"]  # Associate PDF with user
         }
 
-        download_url = f"https://resume-writer.onrender.com/download-resume/{pdf_id}"
+        # Track PDF usage
+        track_pdf_usage(current_user["user_id"])
+
+        download_url = f"https://resume-writer.onrender.com/api/download-resume/{pdf_id}"
 
         return JSONResponse({
             "resume_text": ai_output.strip(),
             "pdf_url": download_url,
             "template_used": template_choice,
-            "success": True
+            "success": True,
+            "user_info": {
+                "tier": current_user.get("tier", "free"),
+                "downloads_used": "tracked"
+            }
         })
 
     except Exception as e:
@@ -695,11 +793,16 @@ Skills:
             "resume_text": ai_output.strip()
         })
 
-@app.get("/download-resume/{pdf_id}")
-async def download_resume(pdf_id: str):
+@app.get("/api/download-resume/{pdf_id}")
+async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_user)):
+    """Enhanced PDF download with user verification"""
     pdf_entry = pdf_store.get(pdf_id)
     if not pdf_entry:
         raise HTTPException(status_code=404, detail="Resume not found or expired")
+
+    # Verify user owns this PDF
+    if pdf_entry.get('user_id') != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     pdf_data = pdf_entry['data'] if isinstance(pdf_entry, dict) else pdf_entry
     filename = pdf_entry.get('filename', f'resume_{pdf_id}.pdf') if isinstance(pdf_entry, dict) else f'resume_{pdf_id}.pdf'
@@ -710,13 +813,87 @@ async def download_resume(pdf_id: str):
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "service": "resume-writer"}
+@app.get("/api/user/usage")
+async def get_user_usage(current_user: dict = Depends(get_current_user)):
+    """Get user's current usage statistics"""
+    from routes.user_management import get_db
+    from datetime import datetime
+    
+    current_month = datetime.now().strftime("%Y-%m")
+    user_tier = get_user_tier_enhanced(current_user["user_id"])
+    tier_limits = TIER_LIMITS[user_tier]
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Get PDF downloads usage
+        cursor.execute("""
+            SELECT usage_count FROM usage_tracking 
+            WHERE user_id = ? AND feature_name = 'pdf_downloads' AND month_year = ?
+        """, (current_user["user_id"], current_month))
+        
+        pdf_result = cursor.fetchone()
+        pdf_downloads_used = pdf_result[0] if pdf_result else 0
+        
+        # Get all usage for this month
+        cursor.execute("""
+            SELECT feature_name, usage_count FROM usage_tracking 
+            WHERE user_id = ? AND month_year = ?
+        """, (current_user["user_id"], current_month))
+        
+        all_usage = dict(cursor.fetchall())
+    
+    return {
+        "current_tier": user_tier.value,
+        "tier_description": tier_limits["description"],
+        "current_month": current_month,
+        "usage": {
+            "pdf_downloads": {
+                "used": pdf_downloads_used,
+                "limit": tier_limits["pdf_downloads_per_month"],
+                "unlimited": tier_limits["pdf_downloads_per_month"] == -1
+            }
+        },
+        "all_features_usage": all_usage,
+        "features_available": tier_limits["features"]
+    }
 
-# Additional endpoint for template previews
-@app.get("/templates")
+@app.get("/api/user/documents")
+async def get_user_documents(current_user: dict = Depends(get_current_user)):
+    """Get user's generated documents (PDFs in memory)"""
+    user_pdfs = []
+    
+    for pdf_id, pdf_data in pdf_store.items():
+        if isinstance(pdf_data, dict) and pdf_data.get('user_id') == current_user["user_id"]:
+            user_pdfs.append({
+                "pdf_id": pdf_id,
+                "filename": pdf_data.get('filename', 'resume.pdf'),
+                "created_at": pdf_data.get('created_at').isoformat() if pdf_data.get('created_at') else None,
+                "download_url": f"/api/download-resume/{pdf_id}"
+            })
+    
+    # Sort by creation time (newest first)
+    user_pdfs.sort(key=lambda x: x['created_at'] or '', reverse=True)
+    
+    return {
+        "documents": user_pdfs,
+        "total_count": len(user_pdfs),
+        "user_tier": current_user.get("tier", "free")
+    }
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy", 
+        "service": "hire-ready-api",
+        "version": "2.0.0",
+        "features": ["authentication", "resume-builder", "ai-analysis"]
+    }
+
+@app.get("/api/templates")
 async def get_templates():
+    """Get available resume templates (public endpoint)"""
     return {
         "templates": [
             {"id": "default", "name": "Modern", "description": "Clean, professional design suitable for most industries"},
@@ -725,3 +902,113 @@ async def get_templates():
             {"id": "executive", "name": "Executive", "description": "Authoritative layout for senior positions"}
         ]
     }
+
+# Public endpoint for checking if someone can register
+@app.post("/api/auth/check-email")
+async def check_email_availability(request: Request):
+    """Check if email is available for registration"""
+    try:
+        body = await request.json()
+        email = body.get("email", "").lower().strip()
+        
+        if not email:
+            return JSONResponse(status_code=400, content={"error": "Email is required"})
+        
+        from routes.user_management import get_user_by_email
+        existing_user = get_user_by_email(email)
+        
+        return {
+            "email": email,
+            "available": existing_user is None,
+            "message": "Email is available" if existing_user is None else "Email is already registered"
+        }
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": "Check failed"})
+
+# Enhanced route for generating anonymous resumes (for non-authenticated users)
+@app.post("/api/generate-resume-guest")
+async def generate_resume_guest(request: Request):
+    """Generate resume for guest users (limited functionality)"""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "Invalid request format"})
+
+    # Extract data
+    data = body.get("data", {})
+    template_choice = body.get("template_choice", "default")
+
+    # Validation
+    if not data.get("full_name") or not data.get("email") or not data.get("job_title"):
+        return JSONResponse(status_code=400, content={
+            "error": "Full Name, Email, and Job Title are required fields."
+        })
+
+    # Limited AI generation for guests
+    base_prompt = f"""Create a basic professional resume for guest user.
+
+Input Information:
+{chr(10).join([f"{k}: {v}" for k, v in data.items() if v])}
+
+Create a simple, professional resume with basic sections.
+Format your response with clear section headers similar to before.
+"""
+
+    # OpenAI API call
+    client = openai.OpenAI()
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a professional resume writer creating basic resumes for guest users."},
+                {"role": "user", "content": base_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=1500
+        )
+    except Exception as e:
+        return JSONResponse(status_code=500, content={
+            "error": f"AI service temporarily unavailable: {str(e)}"
+        })
+
+    ai_output = response.choices[0].message.content
+
+    return JSONResponse({
+        "resume_text": ai_output.strip(),
+        "template_used": template_choice,
+        "success": True,
+        "guest_mode": True,
+        "message": "Register for PDF downloads and advanced features",
+        "register_url": "/api/auth/register"
+    })
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database and perform startup tasks"""
+    try:
+        from routes.user_management import init_database
+        init_database()
+        print("✅ Database initialized successfully")
+        print("🚀 Hire Ready API started successfully")
+        print("📋 Available endpoints:")
+        print("   - POST /api/auth/register - User registration")
+        print("   - POST /api/auth/login - User login")
+        print("   - GET /api/auth/me - Get user info")
+        print("   - POST /api/generate-resume - Generate resume (authenticated)")
+        print("   - POST /api/generate-resume-guest - Generate resume (guest)")
+        print("   - GET /api/user/usage - User usage statistics")
+        print("   - GET /api/user/documents - User documents")
+        print("   - GET /api/health - Health check")
+    except Exception as e:
+        print(f"❌ Startup error: {e}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app", 
+        host="0.0.0.0", 
+        port=int(os.getenv("PORT", 8000)),
+        reload=True
+    )
