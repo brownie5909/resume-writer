@@ -1027,16 +1027,15 @@ async def startup_event():
         from routes.user_management import init_database
         init_database()
         print("✅ Database initialized successfully")
+        
+        # Check if database file exists and log its size
+        import os
+        db_path = "hire_ready.db"
+        if os.path.exists(db_path):
+            size = os.path.getsize(db_path)
+            print(f"📊 Database size: {size} bytes")
+        
         print("🚀 Hire Ready API started successfully")
-        print("📋 Available endpoints:")
-        print("   - POST /api/auth/register - User registration")
-        print("   - POST /api/auth/login - User login")
-        print("   - GET /api/auth/me - Get user info")
-        print("   - POST /api/generate-resume - Generate resume (authenticated)")
-        print("   - POST /api/generate-resume-guest - Generate resume (guest)")
-        print("   - GET /api/user/usage - User usage statistics")
-        print("   - GET /api/user/documents - User documents")
-        print("   - GET /api/health - Health check")
     except Exception as e:
         print(f"❌ Startup error: {e}")
 
