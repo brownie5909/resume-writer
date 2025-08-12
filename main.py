@@ -132,7 +132,8 @@ def check_pdf_download_limit(user_id: str) -> bool:
         
         return current_usage < limit
 
-# Basic resume generation endpoint (simplified without PDF for testing)
+# In main.py, replace the generate_resume function:
+
 @app.post("/api/generate-resume")
 async def generate_resume(request: Request, current_user: dict = Depends(get_current_user)):
     """Enhanced resume generation with user authentication and usage tracking"""
@@ -143,16 +144,6 @@ async def generate_resume(request: Request, current_user: dict = Depends(get_cur
 
     # Clean expired PDFs
     clean_pdf_store()
-
-    # Check PDF download limit for this user
-    if not check_pdf_download_limit(current_user["user_id"]):
-        user_tier = get_user_tier_enhanced(current_user["user_id"])
-        return JSONResponse(status_code=403, content={
-            "error": f"Monthly PDF download limit reached (1 download for free tier)",
-            "upgrade_required": True,
-            "current_tier": user_tier.value,
-            "upgrade_url": "/pricing"
-        })
 
     # Extract data
     data = body.get("data", {})
@@ -204,17 +195,15 @@ Sincerely,
 {data.get('full_name')}
 ''' if generate_cover_letter else ''}"""
 
-    # Create a mock PDF entry
+    # Create a mock PDF entry (but don't track usage yet)
     pdf_id = str(uuid.uuid4())
     pdf_store[pdf_id] = {
         'data': resume_text.encode('utf-8'),  # Mock PDF data
         'created_at': datetime.now(),
         'filename': f"resume_{data.get('full_name', 'user')}_{template_choice}.pdf",
-        'user_id': current_user["user_id"]
+        'user_id': current_user["user_id"],
+        'downloaded': False  # Track if actually downloaded
     }
-
-    # Track PDF usage
-    track_pdf_usage(current_user["user_id"])
 
     download_url = f"/api/download-resume/{pdf_id}"
 
@@ -225,10 +214,44 @@ Sincerely,
         "success": True,
         "user_info": {
             "tier": current_user.get("tier", "free"),
-            "downloads_used": "tracked"
+            "message": "Resume generated. PDF download will count against your limit when downloaded."
         }
     })
 
+@app.get("/api/download-resume/{pdf_id}")
+async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_user)):
+    """Enhanced PDF download with user verification"""
+    pdf_entry = pdf_store.get(pdf_id)
+    if not pdf_entry:
+        raise HTTPException(status_code=404, detail="Resume not found or expired")
+
+    # Verify user owns this PDF
+    if pdf_entry.get('user_id') != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Check PDF download limit ONLY when actually downloading
+    if not pdf_entry.get('downloaded', False):  # Only check limit for first download
+        if not check_pdf_download_limit(current_user["user_id"]):
+            user_tier = get_user_tier_enhanced(current_user["user_id"])
+            raise HTTPException(status_code=403, detail={
+                "error": f"Monthly PDF download limit reached (1 download for free tier)",
+                "upgrade_required": True,
+                "current_tier": user_tier.value,
+                "upgrade_url": "/pricing"
+            })
+        
+        # Track PDF usage only on actual download
+        track_pdf_usage(current_user["user_id"])
+        pdf_entry['downloaded'] = True
+
+    pdf_data = pdf_entry['data'] if isinstance(pdf_entry, dict) else pdf_entry
+    filename = pdf_entry.get('filename', f'resume_{pdf_id}.txt') if isinstance(pdf_entry, dict) else f'resume_{pdf_id}.txt'
+
+    return StreamingResponse(
+        BytesIO(pdf_data), 
+        media_type="text/plain",  # Using text for testing instead of PDF
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 @app.get("/api/download-resume/{pdf_id}")
 async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_user)):
     """Enhanced PDF download with user verification"""
@@ -483,4 +506,5 @@ if __name__ == "__main__":
         host="0.0.0.0", 
         port=int(os.getenv("PORT", 8000)),
         reload=True
+
     )
