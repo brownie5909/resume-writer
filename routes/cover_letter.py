@@ -404,7 +404,7 @@ Sincerely,
     
     return improved_template
 
-@router.post("/analyze-cover-letter")
+@router.post("API/analyze-cover-letter")
 async def analyze_cover_letter(
     file: UploadFile = File(...),
     target_role: Optional[str] = Form(None),
@@ -548,7 +548,7 @@ async def generate_cover_letter(payload: CoverLetterGenerationInput):
         )
 
 # Additional endpoint for text-based analysis
-@router.post("/analyze-cover-letter-text")
+@router.post("API/analyze-cover-letter-text")
 async def analyze_cover_letter_text(payload: CoverLetterAnalysisInput):
     """
     Analyze cover letter text directly without file upload
