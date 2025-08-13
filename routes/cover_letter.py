@@ -380,9 +380,14 @@ def generate_template_improvement(
     # Create improved template based on analysis
     improvements = analysis.get('specific_improvements', [])
     
+    # Build company part separately to avoid nested f-strings
+    company_part = f" at {company_name}" if company_name else ""
+    company_message = ("Your company's commitment to innovation and excellence resonates with my professional values." 
+                      if company_name else "The role offers exciting challenges that match my skills and interests.")
+    
     improved_template = f"""Dear Hiring Manager,
 
-I am writing to express my strong interest in the {target_role or 'position'}{f' at {company_name}' if company_name else ''}. After reviewing your requirements, I am confident that my experience and skills make me an ideal candidate for this role.
+I am writing to express my strong interest in the {target_role or 'position'}{company_part}. After reviewing your requirements, I am confident that my experience and skills make me an ideal candidate for this role.
 
 In my previous roles, I have successfully:
 • Delivered measurable results through strategic problem-solving
@@ -390,7 +395,7 @@ In my previous roles, I have successfully:
 • Adapted quickly to new challenges and technologies
 • Maintained high standards of quality and professionalism
 
-I am particularly drawn to this opportunity because it aligns with my career goals and expertise. {'Your company's commitment to innovation and excellence resonates with my professional values.' if company_name else 'The role offers exciting challenges that match my skills and interests.'}
+I am particularly drawn to this opportunity because it aligns with my career goals and expertise. {company_message}
 
 I would welcome the opportunity to discuss how my experience and enthusiasm can contribute to your team's continued success. Thank you for considering my application.
 
