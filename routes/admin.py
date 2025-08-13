@@ -15,14 +15,38 @@ router = APIRouter()
 
 # Admin authentication decorator
 def require_admin_access(current_user: dict = Depends(get_current_user)):
-    """Require admin access - check if user is admin"""
-    if not (current_user.get("email", "").endswith("@hireready.com") or 
-            current_user.get("is_admin", False) or
-            "admin" in current_user.get("email", "").lower()):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
-        )
+    """Require admin access - check if user has admin privileges in database"""
+    
+    # Check admin flag in database (not just email domain)
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT is_admin, is_active 
+            FROM users 
+            WHERE user_id = ?
+        """, (current_user["user_id"],))
+        
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User not found"
+            )
+        
+        is_admin, is_active = result
+        
+        if not is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account deactivated"
+            )
+        
+        if not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required"
+            )
+    
     return current_user
 
 # Pydantic models for admin operations
@@ -135,16 +159,22 @@ async def get_all_users(
     
     where_clause = " AND ".join(conditions)
     
+    # Build secure parameterized query
+    base_query = """
+        SELECT user_id, email, full_name, tier, is_verified, is_active, 
+               created_at, last_login, stripe_customer_id
+        FROM users 
+        WHERE 
+    """
+    
+    query = base_query + where_clause + """
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+    """
+    
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute(f"""
-            SELECT user_id, email, full_name, tier, is_verified, is_active, 
-                   created_at, last_login, stripe_customer_id
-            FROM users 
-            WHERE {where_clause}
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-        """, params + [limit, offset])
+        cursor.execute(query, params + [limit, offset])
         
         users = []
         for row in cursor.fetchall():

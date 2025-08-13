@@ -3,12 +3,15 @@
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from typing import Optional, Dict, Any
 from io import BytesIO
 import uuid
 import os
 import json
+import re
 from datetime import datetime, timedelta
+from pydantic import BaseModel, EmailStr, validator
 
 # Import your route modules
 from routes.interview import router as interview_router
@@ -35,13 +38,70 @@ app = FastAPI(
     version="2.1.0"
 )
 
+# CORS configuration - secure for production
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for your domain in production
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
+
+# Add trusted host middleware for security
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,*.hireready.com").split(",")
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
+
+# Request validation models
+class ResumeData(BaseModel):
+    full_name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    job_title: str
+    company: Optional[str] = None
+    summary: Optional[str] = None
+    responsibilities: Optional[str] = None
+    degree: Optional[str] = None
+    school: Optional[str] = None
+    skills: Optional[str] = None
+    
+    @validator('full_name')
+    def validate_full_name(cls, v):
+        if not v or len(v.strip()) < 2:
+            raise ValueError('Full name must be at least 2 characters')
+        if len(v) > 100:
+            raise ValueError('Full name too long')
+        # Basic sanitization - allow only letters, spaces, hyphens, apostrophes
+        if not re.match(r"^[a-zA-Z\s\-'\.]+$", v):
+            raise ValueError('Full name contains invalid characters')
+        return v.strip()
+    
+    @validator('job_title')
+    def validate_job_title(cls, v):
+        if not v or len(v.strip()) < 2:
+            raise ValueError('Job title must be at least 2 characters')
+        if len(v) > 200:
+            raise ValueError('Job title too long')
+        return v.strip()
+    
+    @validator('phone')
+    def validate_phone(cls, v):
+        if v and len(v) > 50:
+            raise ValueError('Phone number too long')
+        return v
+
+class ResumeRequest(BaseModel):
+    data: ResumeData
+    template_choice: Optional[str] = "default"
+    generate_cover_letter: Optional[bool] = False
+    
+    @validator('template_choice')
+    def validate_template(cls, v):
+        allowed_templates = ["default", "conservative", "creative", "executive"]
+        if v not in allowed_templates:
+            raise ValueError(f'Invalid template. Allowed: {", ".join(allowed_templates)}')
+        return v
 
 # Include all routers
 app.include_router(user_management_router, prefix="/api", tags=["Authentication & Users"])
@@ -135,64 +195,54 @@ def check_pdf_download_limit(user_id: str) -> bool:
 # In main.py, replace the generate_resume function:
 
 @app.post("/api/generate-resume")
-async def generate_resume(request: Request, current_user: dict = Depends(get_current_user)):
-    """Enhanced resume generation with user authentication and usage tracking"""
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse(status_code=400, content={"error": "Invalid JSON in request"})
-
+async def generate_resume(resume_request: ResumeRequest, current_user: dict = Depends(get_current_user)):
+    """Enhanced resume generation with user authentication and comprehensive validation"""
+    
     # Clean expired PDFs
     clean_pdf_store()
 
-    # Extract data
-    data = body.get("data", {})
-    template_choice = body.get("template_choice", "default")
-    generate_cover_letter = body.get("generate_cover_letter", False)
-
-    # Validation
-    if not data.get("full_name") or not data.get("email") or not data.get("job_title"):
-        return JSONResponse(status_code=400, content={
-            "error": "Full Name, Email, and Job Title are required fields."
-        })
+    # Extract validated data
+    data = resume_request.data
+    template_choice = resume_request.template_choice
+    generate_cover_letter = resume_request.generate_cover_letter
 
     # Mock AI resume generation for testing
-    resume_text = f"""# Professional Resume for {data.get('full_name')}
+    resume_text = f"""# Professional Resume for {data.full_name}
 
 ## Contact Information
-- **Name:** {data.get('full_name')}
-- **Email:** {data.get('email')}
-- **Phone:** {data.get('phone', 'Not provided')}
+- **Name:** {data.full_name}
+- **Email:** {data.email}
+- **Phone:** {data.phone or 'Not provided'}
 
 ## Professional Summary
-Results-driven {data.get('job_title')} with proven experience in delivering exceptional outcomes. 
-{data.get('summary', 'Dedicated professional with strong problem-solving skills and collaborative approach.')}
+Results-driven {data.job_title} with proven experience in delivering exceptional outcomes. 
+{data.summary or 'Dedicated professional with strong problem-solving skills and collaborative approach.'}
 
 ## Professional Experience
-**{data.get('job_title')}** - {data.get('company', 'Previous Company')}
-- {data.get('responsibilities', 'Led key initiatives and delivered measurable results')}
+**{data.job_title}** - {data.company or 'Previous Company'}
+- {data.responsibilities or 'Led key initiatives and delivered measurable results'}
 - Achieved significant improvements in efficiency and performance
 - Collaborated with cross-functional teams to drive success
 
 ## Education
-{data.get('degree', 'Relevant Degree')} - {data.get('school', 'Educational Institution')}
+{data.degree or 'Relevant Degree'} - {data.school or 'Educational Institution'}
 
 ## Key Skills
-{data.get('skills', 'Leadership, Problem-solving, Communication, Technical expertise')}
+{data.skills or 'Leadership, Problem-solving, Communication, Technical expertise'}
 
 {f'''
 ## Cover Letter
 
 Dear Hiring Manager,
 
-I am writing to express my strong interest in the {data.get('job_title')} position. With my background and experience, I am confident that I would be a valuable addition to your team.
+I am writing to express my strong interest in the {data.job_title} position. With my background and experience, I am confident that I would be a valuable addition to your team.
 
-My experience includes {data.get('responsibilities', 'delivering exceptional results and leading successful projects')}. I am particularly drawn to this opportunity because it aligns perfectly with my career goals and expertise.
+My experience includes {data.responsibilities or 'delivering exceptional results and leading successful projects'}. I am particularly drawn to this opportunity because it aligns perfectly with my career goals and expertise.
 
 I would welcome the opportunity to discuss how my skills and enthusiasm can contribute to your organization's continued success.
 
 Sincerely,
-{data.get('full_name')}
+{data.full_name}
 ''' if generate_cover_letter else ''}"""
 
     # Create a mock PDF entry (but don't track usage yet)
@@ -200,7 +250,7 @@ Sincerely,
     pdf_store[pdf_id] = {
         'data': resume_text.encode('utf-8'),  # Mock PDF data
         'created_at': datetime.now(),
-        'filename': f"resume_{data.get('full_name', 'user')}_{template_choice}.pdf",
+        'filename': f"resume_{data.full_name.replace(' ', '_')}_{template_choice}.pdf",
         'user_id': current_user["user_id"],
         'downloaded': False  # Track if actually downloaded
     }
@@ -252,25 +302,7 @@ async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_
         media_type="text/plain",  # Using text for testing instead of PDF
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
-@app.get("/api/download-resume/{pdf_id}")
-async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_user)):
-    """Enhanced PDF download with user verification"""
-    pdf_entry = pdf_store.get(pdf_id)
-    if not pdf_entry:
-        raise HTTPException(status_code=404, detail="Resume not found or expired")
-
-    # Verify user owns this PDF
-    if pdf_entry.get('user_id') != current_user["user_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    pdf_data = pdf_entry['data'] if isinstance(pdf_entry, dict) else pdf_entry
-    filename = pdf_entry.get('filename', f'resume_{pdf_id}.txt') if isinstance(pdf_entry, dict) else f'resume_{pdf_id}.txt'
-
-    return StreamingResponse(
-        BytesIO(pdf_data), 
-        media_type="text/plain",  # Using text for testing instead of PDF
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+# Duplicate route removed - using the enhanced version above with usage tracking
 
 @app.get("/api/user/usage")
 async def get_user_usage(current_user: dict = Depends(get_current_user)):

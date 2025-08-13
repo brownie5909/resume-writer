@@ -19,7 +19,10 @@ router = APIRouter()
 security = HTTPBearer(auto_error=False)
 
 # Security setup
-SECRET_KEY = os.getenv("SECRET_KEY", "hire-ready-super-secret-jwt-key-change-this-in-production-123456789")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is required for security. Generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7

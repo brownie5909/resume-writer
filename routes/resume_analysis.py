@@ -1,11 +1,52 @@
 # Copy this EXACTLY into: routes/resume_analysis.py
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
 import os
+import magic
 from typing import Optional
 
 router = APIRouter()
+
+# File validation constants
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+ALLOWED_MIME_TYPES = {
+    "application/pdf",
+    "application/msword", 
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+    "text/rtf"
+}
+ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".rtf"}
+
+def validate_file(file: UploadFile) -> None:
+    """Comprehensive file validation"""
+    
+    # Check if file exists
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+    
+    # Check file extension
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
+    
+    # Check file size (if available)
+    if hasattr(file, 'size') and file.size and file.size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"File too large. Max size: {MAX_FILE_SIZE // (1024*1024)}MB"
+        )
+    
+    # Check MIME type if provided
+    if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Allowed: PDF, Word documents, plain text"
+        )
 
 @router.post("/analyze-resume")
 async def analyze_resume(
@@ -14,19 +55,15 @@ async def analyze_resume(
     user_id: Optional[str] = Form(None)
 ):
     """
-    Basic resume analysis - simplified for testing
+    Basic resume analysis with comprehensive validation
     """
     
     try:
         print(f"🔬 Starting analysis for file: {file.filename}")
         print(f"🎯 Target role: {target_role}")
         
-        # Simple file validation
-        if not file.filename:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "No file provided"}
-            )
+        # Comprehensive file validation
+        validate_file(file)
         
         # Read file content (basic)
         content = await file.read()
