@@ -588,6 +588,52 @@ async def root():
         "cors_configured_for": get_allowed_origins()
     }
 
+# Add these debug routes to your main.py (before the "if __name__" section)
+
+@app.get("/api/debug/routes")
+async def debug_routes():
+    """Debug endpoint to show all available routes"""
+    routes = []
+    for route in app.routes:
+        if hasattr(route, 'methods') and hasattr(route, 'path'):
+            routes.append({
+                "path": route.path,
+                "methods": list(route.methods),
+                "name": getattr(route, 'name', 'unnamed')
+            })
+    
+    return {
+        "total_routes": len(routes),
+        "routes": sorted(routes, key=lambda x: x['path']),
+        "api_routes": [r for r in routes if r['path'].startswith('/api/')]
+    }
+
+@app.get("/api/debug/test-research")
+async def test_research_endpoint():
+    """Test the research endpoint directly"""
+    try:
+        # Import the research function
+        from routes.interview import research_job_application, JobResearchInput
+        
+        # Test with sample data
+        test_payload = JobResearchInput(
+            company_name="Test Company",
+            job_role="Test Role"
+        )
+        
+        result = await research_job_application(test_payload)
+        return {
+            "test_status": "success",
+            "endpoint_working": True,
+            "sample_result": result
+        }
+    except Exception as e:
+        return {
+            "test_status": "error",
+            "endpoint_working": False,
+            "error": str(e)
+        }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
