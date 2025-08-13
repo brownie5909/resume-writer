@@ -1,4 +1,4 @@
-# AI-Powered Cover Letter Generation and Analysis
+# Copy this EXACTLY into: routes/cover_letter.py
 
 from fastapi import APIRouter, UploadFile, File, Form, Request, Depends
 from fastapi.responses import JSONResponse
@@ -33,7 +33,7 @@ class CoverLetterGenerationInput(BaseModel):
     experience: Optional[str] = None
     achievements: Optional[str] = None
     company_name: Optional[str] = None
-    tone_preference: Optional[str] = "professional"  # professional, enthusiastic, formal
+    tone_preference: Optional[str] = "professional"
 
 def extract_json_content(content: str) -> str:
     """Enhanced JSON extraction from AI response"""
@@ -134,7 +134,7 @@ async def ai_analyze_cover_letter(
                 }
                 
                 data = {
-                    "model": "gpt-4o-mini",  # Better for detailed analysis
+                    "model": "gpt-4o-mini",
                     "messages": [
                         {
                             "role": "system", 
@@ -142,8 +142,8 @@ async def ai_analyze_cover_letter(
                         },
                         {"role": "user", "content": analysis_prompt}
                     ],
-                    "temperature": 0.3,  # Lower for more consistent analysis
-                    "max_tokens": 2000   # Allow comprehensive analysis
+                    "temperature": 0.3,
+                    "max_tokens": 2000
                 }
                 
                 async with session.post("https://api.openai.com/v1/chat/completions", 
@@ -155,7 +155,6 @@ async def ai_analyze_cover_letter(
                         
                         # Enhanced JSON parsing
                         try:
-                            # Clean and extract JSON
                             json_content = extract_json_content(ai_content)
                             analysis_result = json.loads(json_content)
                             
@@ -218,7 +217,7 @@ async def fallback_cover_letter_analysis(
         'avoids_generic': not any(generic in text_lower for generic in ['to whom it may concern', 'dear sir/madam'])
     }
     
-    quality_score = sum(quality_indicators.values()) * 3  # Max 24 points
+    quality_score = sum(quality_indicators.values()) * 3
     overall_score = min(95, base_score + quality_score + (length_score - 65))
     
     # Generate contextual feedback
@@ -341,8 +340,8 @@ async def ai_improve_cover_letter(
                         },
                         {"role": "user", "content": improvement_prompt}
                     ],
-                    "temperature": 0.7,  # Balanced creativity and consistency
-                    "max_tokens": 1500   # Allow for comprehensive improvements
+                    "temperature": 0.7,
+                    "max_tokens": 1500
                 }
                 
                 async with session.post("https://api.openai.com/v1/chat/completions", 
@@ -404,7 +403,8 @@ Sincerely,
     
     return improved_template
 
-@router.post("API/analyze-cover-letter")
+# ROUTES - Using the imported helper functions
+@router.post("/analyze-cover-letter")
 async def analyze_cover_letter(
     file: UploadFile = File(...),
     target_role: Optional[str] = Form(None),
@@ -429,28 +429,12 @@ async def analyze_cover_letter(
                 content={"error": "No file provided"}
             )
         
-        # Validate file type
-        allowed_types = ['text/plain', 'application/pdf', 'application/msword', 
-                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-        if file.content_type not in allowed_types:
-            return JSONResponse(
-                status_code=400,
-                content={"error": f"Unsupported file type: {file.content_type}. Please upload a PDF, Word document, or text file."}
-            )
-        
         # Read file content
         content = await file.read()
         
-        # Basic text extraction (enhanced for different file types)
+        # Basic text extraction
         try:
-            if file.content_type == 'text/plain':
-                cover_letter_text = content.decode('utf-8')
-            elif 'pdf' in file.content_type:
-                # For PDF files, we'll use a basic approach since python-magic is already in requirements
-                cover_letter_text = content.decode('utf-8', errors='ignore')
-            else:
-                # For Word documents, basic text extraction
-                cover_letter_text = content.decode('utf-8', errors='ignore')
+            cover_letter_text = content.decode('utf-8')
         except Exception as e:
             return JSONResponse(
                 status_code=400,
@@ -510,7 +494,7 @@ async def generate_cover_letter(payload: CoverLetterGenerationInput):
         print(f"🎯 Job posting length: {len(payload.job_posting)} characters")
         print(f"🎨 Tone preference: {payload.tone_preference}")
         
-        # Generate cover letter using AI
+        # Generate cover letter using AI helper function
         cover_letter = await ai_generate_cover_letter(
             job_posting=payload.job_posting,
             applicant_name=payload.applicant_name,
@@ -547,8 +531,7 @@ async def generate_cover_letter(payload: CoverLetterGenerationInput):
             content={"error": f"Generation failed: {str(e)}"}
         )
 
-# Additional endpoint for text-based analysis
-@router.post("API/analyze-cover-letter-text")
+@router.post("/analyze-cover-letter-text")
 async def analyze_cover_letter_text(payload: CoverLetterAnalysisInput):
     """
     Analyze cover letter text directly without file upload
@@ -600,7 +583,6 @@ async def analyze_cover_letter_text(payload: CoverLetterAnalysisInput):
             content={"error": f"Analysis failed: {str(e)}"}
         )
 
-# Health check endpoint
 @router.get("/cover-letter/health")
 async def cover_letter_health():
     """Health check for cover letter service"""
