@@ -32,26 +32,83 @@ from routes.subscriptions import router as subscriptions_router
 from dotenv import load_dotenv
 load_dotenv()
 
+# Security configuration functions
+def get_allowed_origins():
+    """Get allowed origins from environment variable with proper defaults"""
+    origins_env = os.getenv("ALLOWED_ORIGINS", "")
+    
+    if origins_env:
+        origins = [origin.strip() for origin in origins_env.split(",") if origin.strip()]
+    else:
+        # Default origins for development and production
+        origins = [
+            "http://localhost:3000",
+            "http://localhost:8000", 
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8000",
+            "https://jobreadytools.com.au",
+            "https://www.jobreadytools.com.au"
+        ]
+    
+    print(f"🌐 CORS allowed origins: {origins}")
+    return origins
+
+def get_trusted_hosts():
+    """Get trusted hosts from environment variable with proper defaults"""
+    hosts_env = os.getenv("TRUSTED_HOSTS", "")
+    
+    if hosts_env:
+        hosts = [host.strip() for host in hosts_env.split(",") if host.strip()]
+    else:
+        # Default hosts for development and production
+        hosts = [
+            "localhost", 
+            "127.0.0.1", 
+            "*.localhost",
+            "resume-writer.onrender.com",
+            "*.onrender.com",
+            "jobreadytools.com.au",
+            "www.jobreadytools.com.au",
+            "*.jobreadytools.com.au"
+        ]
+    
+    print(f"🔒 Trusted hosts: {hosts}")
+    return hosts
+
+# Validate SECRET_KEY for production
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+if ENVIRONMENT == "production":
+    if not SECRET_KEY or SECRET_KEY == "hire-ready-super-secret-jwt-key-change-this-in-production-123456789":
+        raise ValueError("❌ CRITICAL: You must set a secure SECRET_KEY for production!")
+    print("✅ Production mode: SECRET_KEY is configured")
+else:
+    if not SECRET_KEY:
+        print("⚠️  WARNING: Using default SECRET_KEY in development. Change for production!")
+
 app = FastAPI(
     title="Hire Ready API",
     description="AI-powered job application tools with comprehensive user and subscription management",
     version="2.1.0"
 )
 
-# CORS configuration - secure for production
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
-
+# Add security middleware (order matters!)
+# 1. Trusted Host Middleware first
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
+    TrustedHostMiddleware,
+    allowed_hosts=get_trusted_hosts()
 )
 
-# Add trusted host middleware for security
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,*.hireready.com").split(",")
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
+# 2. CORS Middleware second
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_allowed_origins(),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+    allow_headers=["*"],
+    expose_headers=["*"]
+)
 
 # Request validation models
 class ResumeData(BaseModel):
@@ -192,8 +249,6 @@ def check_pdf_download_limit(user_id: str) -> bool:
         
         return current_usage < limit
 
-# In main.py, replace the generate_resume function:
-
 @app.post("/api/generate-resume")
 async def generate_resume(resume_request: ResumeRequest, current_user: dict = Depends(get_current_user)):
     """Enhanced resume generation with user authentication and comprehensive validation"""
@@ -302,7 +357,6 @@ async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_
         media_type="text/plain",  # Using text for testing instead of PDF
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
-# Duplicate route removed - using the enhanced version above with usage tracking
 
 @app.get("/api/user/usage")
 async def get_user_usage(current_user: dict = Depends(get_current_user)):
@@ -371,12 +425,14 @@ async def get_user_documents(current_user: dict = Depends(get_current_user)):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint with CORS info for debugging"""
     return {
         "status": "healthy", 
         "service": "hire-ready-api",
         "version": "2.1.0",
-        "features": ["authentication", "resume-builder", "ai-analysis", "admin-panel"]
+        "features": ["authentication", "resume-builder", "ai-analysis", "admin-panel"],
+        "cors_origins": get_allowed_origins(),
+        "environment": ENVIRONMENT
     }
 
 @app.get("/api/templates")
@@ -528,7 +584,8 @@ async def root():
         "test_users": {
             "regular": "test@hireready.com / testpass123",
             "admin": "admin@hireready.com / admin123"
-        }
+        },
+        "cors_configured_for": get_allowed_origins()
     }
 
 if __name__ == "__main__":
@@ -538,5 +595,4 @@ if __name__ == "__main__":
         host="0.0.0.0", 
         port=int(os.getenv("PORT", 8000)),
         reload=True
-
     )
