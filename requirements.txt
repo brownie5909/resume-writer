@@ -4,3 +4,5 @@ python-multipart
 python-dotenv
 passlib[bcrypt]
 email-validator
+python-magic
+python-jose[cryptography]
