@@ -2,8 +2,8 @@ fastapi
 uvicorn
 python-multipart
 python-dotenv
-passlib[bcrypt]=1.7.4
-bcrypt=4.0.1
+passlib==1.7.4
+bcrypt==4.0.1
 email-validator
 python-magic
 python-jose[cryptography]
