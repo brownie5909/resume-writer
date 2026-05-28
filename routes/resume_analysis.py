@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
+from app.utils.file_parser import extract_text_from_file
 import os
 import magic
 from typing import Optional
@@ -65,9 +66,16 @@ async def analyze_resume(
         # Comprehensive file validation
         validate_file(file)
         
-        # Read file content (basic)
-        content = await file.read()
-        text_content = "Sample resume content for testing"
+       # Extract real resume text
+        text_content = await extract_text_from_file(file)
+        
+        if not text_content or len(text_content.strip()) < 50:
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract enough text from the resume. Please upload a clearer PDF, DOCX, or TXT file."
+            )
+        
+        print(f"📄 Extracted resume text length: {len(text_content)}")
         
         # Mock analysis for testing
         analysis_result = {
