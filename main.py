@@ -11,12 +11,7 @@ import json
 import re
 from datetime import datetime, timedelta
 from pydantic import BaseModel, EmailStr, validator
-from app.core.config import (
-    get_allowed_origins,
-    get_trusted_hosts,
-    SECRET_KEY,
-    ENVIRONMENT
-)
+from app.core.config import SECRET_KEY, ENVIRONMENT
 
 # Import your route modules
 from routes.interview import router as interview_router
