@@ -35,11 +35,12 @@ from routes.subscriptions import router as subscriptions_router
 
 
 app = FastAPI(
-    setup_middleware(app)title="Hire Ready API",
+    title="Hire Ready API",
     description="AI-powered job application tools with comprehensive user and subscription management",
     version="2.1.0"
 )
 
+setup_middleware(app)
 
 # Request validation models
 class ResumeData(BaseModel):
