@@ -9,3 +9,5 @@ python-magic
 python-jose[cryptography]
 openai
 aiohttp
+PyPDF2
+python-docx
