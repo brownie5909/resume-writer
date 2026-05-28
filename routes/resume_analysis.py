@@ -66,7 +66,7 @@ async def analyze_resume(
         # Comprehensive file validation
         validate_file(file)
         
-       # Extract real resume text
+        # Extract real resume text
         text_content = await extract_text_from_file(file)
         
         if not text_content or len(text_content.strip()) < 50:
