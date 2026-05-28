@@ -4,10 +4,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# Load environment variables
-from dotenv import load_dotenv
-load_dotenv()
-
 # Security configuration functions
 def get_allowed_origins():
     """Get allowed origins from environment variable with proper defaults"""
