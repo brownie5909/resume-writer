@@ -1,3 +1,6 @@
+import sqlite3
+from contextlib import contextmanager
+
 # Database setup
 DB_PATH = "hire_ready.db"
 
