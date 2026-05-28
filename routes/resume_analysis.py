@@ -3,6 +3,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from app.utils.file_parser import extract_text_from_file
+from app.services.openai_service import analyze_resume_with_ai
 import os
 import magic
 from typing import Optional
@@ -77,72 +78,28 @@ async def analyze_resume(
         
         print(f"📄 Extracted resume text length: {len(text_content)}")
         
-        # Mock analysis for testing
-        analysis_result = {
-            "overall_score": 75,
-            "ats_score": 80,
-            "formatting_score": 70,
-            "strengths": [
-                "Clear contact information",
-                "Professional experience documented", 
-                "Skills section present"
-            ],
-            "weaknesses": [
-                "Could add more quantified achievements",
-                "Consider adding a professional summary",
-                "Improve keyword optimization"
-            ],
-            "keyword_analysis": {
-                "missing_keywords": ["leadership", "results-driven", "collaborative"],
-                "present_keywords": ["experience", "skills", "professional"],
-                "keyword_density": 65
-            },
-            "sections_analysis": {
-                "contact_info": {"score": 85, "feedback": "Contact information is clear and complete"},
-                "summary": {"score": 60, "feedback": "Consider adding a compelling professional summary"},
-                "experience": {"score": 75, "feedback": "Experience section is well-structured"},
-                "education": {"score": 80, "feedback": "Education background is clearly presented"},
-                "skills": {"score": 70, "feedback": "Skills section could be more specific"}
-            },
-            "specific_improvements": [
-                "Add quantified achievements with specific numbers and percentages",
-                "Include a compelling professional summary at the top",
-                "Use stronger action verbs (achieved, implemented, optimized)",
-                f"Optimize for {target_role} keywords" if target_role else "Add relevant industry keywords"
-            ],
-            "ats_recommendations": [
-                "Use standard section headers (Experience, Education, Skills)",
-                "Maintain consistent formatting throughout",
-                "Include relevant keywords naturally in content"
-            ]
-        }
-        
-        # Mock improved resume
-        improved_resume = f"""
-IMPROVED RESUME FOR {target_role or 'TARGET ROLE'}
-
-[Your Name]
-[Email] | [Phone] | [Location]
-
-PROFESSIONAL SUMMARY
-Results-driven professional with proven experience in delivering exceptional outcomes.
-Strong background in problem-solving and team collaboration.
-
-EXPERIENCE
-• Previous Role - Company Name
-  - Achieved 25% improvement in efficiency through process optimization
-  - Led cross-functional team of 5+ members
-  - Implemented new systems resulting in $50K annual savings
-
-EDUCATION
-• Degree - Institution Name
-• Relevant certifications and training
-
-SKILLS
-• Technical Skills: [Relevant to {target_role or 'role'}]
-• Soft Skills: Leadership, Communication, Problem-solving
-• Industry Knowledge: Best practices and current trends
-        """
+    # Real AI analysis
+    ai_result = await analyze_resume_with_ai(
+        resume_text=text_content,
+        target_role=target_role
+    )
+    
+    analysis_result = {
+        "overall_score": ai_result.get("overall_score", 70),
+        "ats_score": ai_result.get("ats_score", 70),
+        "formatting_score": ai_result.get("formatting_score", 70),
+        "strengths": ai_result.get("strengths", []),
+        "weaknesses": ai_result.get("weaknesses", []),
+        "keyword_analysis": ai_result.get("keyword_analysis", {}),
+        "sections_analysis": ai_result.get("sections_analysis", {}),
+        "specific_improvements": ai_result.get("specific_improvements", []),
+        "ats_recommendations": ai_result.get("ats_recommendations", [])
+    }
+    
+    improved_resume = ai_result.get(
+        "improved_resume",
+        "No improved resume generated."
+    )
         
         return JSONResponse({
             "success": True,
