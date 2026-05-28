@@ -96,10 +96,10 @@ async def analyze_resume(
             "ats_recommendations": ai_result.get("ats_recommendations", [])
         }
     
-    improved_resume = ai_result.get(
-        "improved_resume",
-        "No improved resume generated."
-    )
+        improved_resume = ai_result.get(
+            "improved_resume",
+            "No improved resume generated."
+        )
         
         return JSONResponse({
             "success": True,
