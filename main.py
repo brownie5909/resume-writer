@@ -2,8 +2,7 @@
 
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from app.core.middleware import setup_middleware
 from typing import Optional, Dict, Any
 from io import BytesIO
 import uuid
@@ -36,27 +35,11 @@ from routes.subscriptions import router as subscriptions_router
 
 
 app = FastAPI(
-    title="Hire Ready API",
+    setup_middleware(app)title="Hire Ready API",
     description="AI-powered job application tools with comprehensive user and subscription management",
     version="2.1.0"
 )
 
-# Add security middleware (order matters!)
-# 1. Trusted Host Middleware first
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=get_trusted_hosts()
-)
-
-# 2. CORS Middleware second
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=get_allowed_origins(),
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
-    allow_headers=["*"],
-    expose_headers=["*"]
-)
 
 # Request validation models
 class ResumeData(BaseModel):
