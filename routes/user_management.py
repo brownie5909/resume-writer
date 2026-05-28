@@ -10,8 +10,7 @@ from typing import Optional, Dict, Any
 import os
 import uuid
 import secrets
-import sqlite3
-from contextlib import contextmanager
+from app.database.db import get_db, init_database, DB_PATH
 import hashlib
 import re
 
