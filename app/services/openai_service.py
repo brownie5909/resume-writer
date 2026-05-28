@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -74,11 +75,33 @@ Rules:
             }
         ],
         temperature=0.4
-    )
+    )response = client.chat.completions.create(
+    model="gpt-4.1-mini",
+    messages=[
+        {
+            "role": "system",
+            "content": "You are an expert resume reviewer. Always return valid JSON only."
+        },
+        {
+            "role": "user",
+            "content": prompt
+        }
+    ],
+    temperature=0.2,
+    response_format={"type": "json_object"}
+)
 
     content = response.choices[0].message.content
 
-    try:
-        return json.loads(content)
-    except Exception:
-        raise Exception(f"AI returned invalid JSON: {content}")
+try:
+    return json.loads(content)
+except json.JSONDecodeError:
+    # Fallback: try to extract JSON object if model adds extra text
+    match = re.search(r"\{.*\}", content, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            pass
+
+    raise Exception(f"AI returned invalid JSON: {content}")
