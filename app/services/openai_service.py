@@ -62,21 +62,21 @@ Rules:
 - Rewrite the resume professionally in improved_resume
 """
 
-    response = client.chat.completions.create(
-    model="gpt-4.1-mini",
-    messages=[
-        {
-            "role": "system",
-            "content": "You are an expert resume reviewer. Always return valid JSON only."
-        },
-        {
-            "role": "user",
-            "content": prompt
-        }
-    ],
-    temperature=0.2,
-    response_format={"type": "json_object"}
-)
+        response = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are an expert resume reviewer. Always return valid JSON only."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=0.2,
+        response_format={"type": "json_object"}
+    )
 
     content = response.choices[0].message.content
     
