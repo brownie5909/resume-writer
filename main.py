@@ -34,7 +34,7 @@ from routes.subscriptions import router as subscriptions_router
 app = FastAPI(
     title="Hire Ready API",
     description="AI-powered job application tools with comprehensive user and subscription management",
-    version="2.2.1"
+    version="2.2.2"
 )
 
 setup_middleware(app)
@@ -154,6 +154,7 @@ def check_pdf_download_limit(user_id: str) -> bool:
     user_tier = get_user_tier_enhanced(user_id)
 
     tier_limits = {
+        "basic": {"pdf_downloads_per_month": 1},
         "free": {"pdf_downloads_per_month": 1},
         "premium": {"pdf_downloads_per_month": -1},
         "professional": {"pdf_downloads_per_month": -1}
@@ -181,10 +182,10 @@ def check_pdf_download_limit(user_id: str) -> bool:
 
 async def build_resume_response(
     resume_request: ResumeRequest,
-    owner_id: str,
+    owner_id: Optional[str] = None,
     is_guest: bool = False
 ):
-    """Shared resume generation logic for guest and logged-in users."""
+    """Shared resume generation logic for guest previews and logged-in PDF generation."""
     clean_pdf_store()
 
     data = resume_request.data
@@ -201,6 +202,24 @@ async def build_resume_response(
     cover_letter = ai_result.get("cover_letter", "")
     ats_notes = ai_result.get("ats_notes", "")
 
+    response_payload = {
+        "success": True,
+        "resume_text": resume_text,
+        "cover_letter": cover_letter,
+        "ats_notes": ats_notes,
+        "template_used": template_choice,
+        "requires_login_for_pdf": is_guest,
+        "pdf_url": None,
+        "user_info": {
+            "tier": "guest" if is_guest else "authenticated",
+            "message": "AI resume generated successfully. Log in to download a PDF." if is_guest else "AI resume generated successfully. PDF download is available for your account."
+        }
+    }
+
+    # Guests can preview generated output, but cannot create/download PDFs.
+    if is_guest:
+        return JSONResponse(response_payload)
+
     pdf_bytes = generate_resume_pdf(
         resume_text=resume_text,
         cover_letter=cover_letter
@@ -214,34 +233,23 @@ async def build_resume_response(
         'created_at': datetime.now(),
         'filename': f"resume_{safe_name}_{template_choice}.pdf",
         'user_id': owner_id,
-        'is_guest': is_guest,
+        'is_guest': False,
         'downloaded': False
     }
 
-    download_url = f"/api/download-resume-guest/{pdf_id}" if is_guest else f"/api/download-resume/{pdf_id}"
+    response_payload["pdf_url"] = f"/api/download-resume/{pdf_id}"
+    response_payload["requires_login_for_pdf"] = False
 
-    return JSONResponse({
-        "success": True,
-        "resume_text": resume_text,
-        "cover_letter": cover_letter,
-        "ats_notes": ats_notes,
-        "pdf_url": download_url,
-        "template_used": template_choice,
-        "user_info": {
-            "tier": "guest" if is_guest else "authenticated",
-            "message": "AI resume generated successfully."
-        }
-    })
+    return JSONResponse(response_payload)
 
 
 @app.post("/api/generate-resume-guest")
 async def generate_resume_guest(resume_request: ResumeRequest):
-    """Public/guest resume generation endpoint used by the WordPress page."""
+    """Guest endpoint used by WordPress to preview AI output before login."""
     try:
-        guest_id = f"guest_{uuid.uuid4()}"
         return await build_resume_response(
             resume_request=resume_request,
-            owner_id=guest_id,
+            owner_id=None,
             is_guest=True
         )
     except Exception as e:
@@ -277,23 +285,14 @@ async def generate_resume(resume_request: ResumeRequest, current_user: dict = De
 
 @app.get("/api/download-resume-guest/{pdf_id}")
 async def download_resume_guest(pdf_id: str):
-    """Guest PDF download without login. Only works for guest-generated PDFs."""
-    pdf_entry = pdf_store.get(pdf_id)
-
-    if not pdf_entry:
-        raise HTTPException(status_code=404, detail="Resume not found or expired")
-
-    if not pdf_entry.get('is_guest'):
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    pdf_entry['downloaded'] = True
-    pdf_data = pdf_entry['data']
-    filename = pdf_entry.get('filename', f'resume_{pdf_id}.pdf')
-
-    return StreamingResponse(
-        BytesIO(pdf_data),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    """Guest PDF downloads are intentionally blocked."""
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "error": "PDF downloads require a logged-in account",
+            "login_required": True,
+            "login_url": "/login"
+        }
     )
 
 
@@ -312,7 +311,7 @@ async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_
         if not check_pdf_download_limit(current_user["user_id"]):
             user_tier = get_user_tier_enhanced(current_user["user_id"])
             raise HTTPException(status_code=403, detail={
-                "error": "Monthly PDF download limit reached (1 download for free tier)",
+                "error": "Monthly PDF download limit reached for your current plan",
                 "upgrade_required": True,
                 "current_tier": user_tier.value,
                 "upgrade_url": "/pricing"
@@ -333,7 +332,7 @@ async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_
 
 @app.get("/")
 def root():
-    return {"message": "Hire Ready API is running", "version": "2.2.1"}
+    return {"message": "Hire Ready API is running", "version": "2.2.2"}
 
 
 @app.get("/health")
