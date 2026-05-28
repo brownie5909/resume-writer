@@ -3,7 +3,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, validator
-from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional, Dict, Any
@@ -20,10 +19,9 @@ from app.core.security import (
 )
 import os
 import uuid
-import secrets
 from app.database.db import get_db, init_database, DB_PATH
-import hashlib
 import re
+import sqlite3
 
 router = APIRouter()
 security = HTTPBearer(auto_error=False)
