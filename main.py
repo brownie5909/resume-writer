@@ -34,7 +34,7 @@ from routes.subscriptions import router as subscriptions_router
 app = FastAPI(
     title="Hire Ready API",
     description="AI-powered job application tools with comprehensive user and subscription management",
-    version="2.2.0"
+    version="2.2.1"
 )
 
 setup_middleware(app)
@@ -100,7 +100,7 @@ app.include_router(resume_analysis_router, prefix="/api", tags=["Resume Analysis
 app.include_router(cover_letter_router, prefix="/api", tags=["Cover Letter"])
 
 
-# Enhanced PDF storage with expiration and user association
+# Temporary in-memory PDF storage. Later we should move this to persistent storage.
 pdf_store = {}
 PDF_EXPIRY_HOURS = 24
 
@@ -179,57 +179,91 @@ def check_pdf_download_limit(user_id: str) -> bool:
         return current_usage < limit
 
 
+async def build_resume_response(
+    resume_request: ResumeRequest,
+    owner_id: str,
+    is_guest: bool = False
+):
+    """Shared resume generation logic for guest and logged-in users."""
+    clean_pdf_store()
+
+    data = resume_request.data
+    template_choice = resume_request.template_choice
+    generate_cover_letter = resume_request.generate_cover_letter
+
+    ai_result = await generate_resume_with_ai(
+        data=data,
+        template_choice=template_choice,
+        generate_cover_letter=generate_cover_letter
+    )
+
+    resume_text = ai_result.get("resume_text", "")
+    cover_letter = ai_result.get("cover_letter", "")
+    ats_notes = ai_result.get("ats_notes", "")
+
+    pdf_bytes = generate_resume_pdf(
+        resume_text=resume_text,
+        cover_letter=cover_letter
+    )
+
+    pdf_id = str(uuid.uuid4())
+    safe_name = data.full_name.replace(' ', '_')
+
+    pdf_store[pdf_id] = {
+        'data': pdf_bytes,
+        'created_at': datetime.now(),
+        'filename': f"resume_{safe_name}_{template_choice}.pdf",
+        'user_id': owner_id,
+        'is_guest': is_guest,
+        'downloaded': False
+    }
+
+    download_url = f"/api/download-resume-guest/{pdf_id}" if is_guest else f"/api/download-resume/{pdf_id}"
+
+    return JSONResponse({
+        "success": True,
+        "resume_text": resume_text,
+        "cover_letter": cover_letter,
+        "ats_notes": ats_notes,
+        "pdf_url": download_url,
+        "template_used": template_choice,
+        "user_info": {
+            "tier": "guest" if is_guest else "authenticated",
+            "message": "AI resume generated successfully."
+        }
+    })
+
+
+@app.post("/api/generate-resume-guest")
+async def generate_resume_guest(resume_request: ResumeRequest):
+    """Public/guest resume generation endpoint used by the WordPress page."""
+    try:
+        guest_id = f"guest_{uuid.uuid4()}"
+        return await build_resume_response(
+            resume_request=resume_request,
+            owner_id=guest_id,
+            is_guest=True
+        )
+    except Exception as e:
+        print(f"❌ Guest resume generation error: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": f"Guest resume generation failed: {str(e)}"
+            }
+        )
+
+
 @app.post("/api/generate-resume")
 async def generate_resume(resume_request: ResumeRequest, current_user: dict = Depends(get_current_user)):
-    """Generate AI-powered ATS-friendly resumes and PDFs"""
-
+    """Generate AI-powered ATS-friendly resumes and PDFs for logged-in users."""
     try:
-        clean_pdf_store()
-
-        data = resume_request.data
-        template_choice = resume_request.template_choice
-        generate_cover_letter = resume_request.generate_cover_letter
-
-        ai_result = await generate_resume_with_ai(
-            data=data,
-            template_choice=template_choice,
-            generate_cover_letter=generate_cover_letter
+        return await build_resume_response(
+            resume_request=resume_request,
+            owner_id=current_user["user_id"],
+            is_guest=False
         )
-
-        resume_text = ai_result.get("resume_text", "")
-        cover_letter = ai_result.get("cover_letter", "")
-        ats_notes = ai_result.get("ats_notes", "")
-
-        pdf_bytes = generate_resume_pdf(
-            resume_text=resume_text,
-            cover_letter=cover_letter
-        )
-
-        pdf_id = str(uuid.uuid4())
-
-        pdf_store[pdf_id] = {
-            'data': pdf_bytes,
-            'created_at': datetime.now(),
-            'filename': f"resume_{data.full_name.replace(' ', '_')}_{template_choice}.pdf",
-            'user_id': current_user["user_id"],
-            'downloaded': False
-        }
-
-        download_url = f"/api/download-resume/{pdf_id}"
-
-        return JSONResponse({
-            "success": True,
-            "resume_text": resume_text,
-            "cover_letter": cover_letter,
-            "ats_notes": ats_notes,
-            "pdf_url": download_url,
-            "template_used": template_choice,
-            "user_info": {
-                "tier": current_user.get("tier", "free"),
-                "message": "AI resume generated successfully. PDF download will count against your limit when downloaded."
-            }
-        })
-
     except Exception as e:
         print(f"❌ Resume generation error: {str(e)}")
         return JSONResponse(
@@ -241,9 +275,31 @@ async def generate_resume(resume_request: ResumeRequest, current_user: dict = De
         )
 
 
+@app.get("/api/download-resume-guest/{pdf_id}")
+async def download_resume_guest(pdf_id: str):
+    """Guest PDF download without login. Only works for guest-generated PDFs."""
+    pdf_entry = pdf_store.get(pdf_id)
+
+    if not pdf_entry:
+        raise HTTPException(status_code=404, detail="Resume not found or expired")
+
+    if not pdf_entry.get('is_guest'):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    pdf_entry['downloaded'] = True
+    pdf_data = pdf_entry['data']
+    filename = pdf_entry.get('filename', f'resume_{pdf_id}.pdf')
+
+    return StreamingResponse(
+        BytesIO(pdf_data),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @app.get("/api/download-resume/{pdf_id}")
 async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_user)):
-    """Enhanced PDF download with user verification"""
+    """Authenticated PDF download with user verification and usage tracking."""
     pdf_entry = pdf_store.get(pdf_id)
 
     if not pdf_entry:
@@ -273,3 +329,13 @@ async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+@app.get("/")
+def root():
+    return {"message": "Hire Ready API is running", "version": "2.2.1"}
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "service": "hire-ready-api"}
