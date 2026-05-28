@@ -78,23 +78,23 @@ async def analyze_resume(
         
         print(f"📄 Extracted resume text length: {len(text_content)}")
         
-    # Real AI analysis
-    ai_result = await analyze_resume_with_ai(
-        resume_text=text_content,
-        target_role=target_role
-    )
-    
-    analysis_result = {
-        "overall_score": ai_result.get("overall_score", 70),
-        "ats_score": ai_result.get("ats_score", 70),
-        "formatting_score": ai_result.get("formatting_score", 70),
-        "strengths": ai_result.get("strengths", []),
-        "weaknesses": ai_result.get("weaknesses", []),
-        "keyword_analysis": ai_result.get("keyword_analysis", {}),
-        "sections_analysis": ai_result.get("sections_analysis", {}),
-        "specific_improvements": ai_result.get("specific_improvements", []),
-        "ats_recommendations": ai_result.get("ats_recommendations", [])
-    }
+        # Real AI analysis
+        ai_result = await analyze_resume_with_ai(
+            resume_text=text_content,
+            target_role=target_role
+        )
+        
+        analysis_result = {
+            "overall_score": ai_result.get("overall_score", 70),
+            "ats_score": ai_result.get("ats_score", 70),
+            "formatting_score": ai_result.get("formatting_score", 70),
+            "strengths": ai_result.get("strengths", []),
+            "weaknesses": ai_result.get("weaknesses", []),
+            "keyword_analysis": ai_result.get("keyword_analysis", {}),
+            "sections_analysis": ai_result.get("sections_analysis", {}),
+            "specific_improvements": ai_result.get("specific_improvements", []),
+            "ats_recommendations": ai_result.get("ats_recommendations", [])
+        }
     
     improved_resume = ai_result.get(
         "improved_resume",
