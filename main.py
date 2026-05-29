@@ -6,6 +6,7 @@ from io import BytesIO
 import uuid
 import re
 from routes.resume_documents import router as resume_documents_router
+from app.services.resume_document_service import create_resume_document
 from datetime import datetime, timedelta
 from pydantic import BaseModel, EmailStr, validator
 
@@ -226,6 +227,17 @@ async def build_resume_response(
 
     pdf_id = str(uuid.uuid4())
     safe_name = data.full_name.replace(" ", "_")
+    "filename": pdf_filename,
+    "document_id": saved_document.get("document_id"),
+    
+    saved_document = create_resume_document(
+        user_id=owner_id,
+        title=f"{data.full_name} - {data.job_title}",
+        resume_text=resume_text,
+        cover_letter_text=cover_letter,
+        template=template_choice,
+        pdf_filename=pdf_filename
+    )
 
     pdf_store[pdf_id] = {
         "data": pdf_bytes,
@@ -238,6 +250,15 @@ async def build_resume_response(
 
     response_payload["pdf_url"] = f"/api/download-resume/{pdf_id}"
     response_payload["requires_login_for_pdf"] = False
+    response_payload["document_id"] = saved_document.get("document_id")
+    response_payload["saved_resume"] = {
+        "document_id": saved_document.get("document_id"),
+        "title": saved_document.get("title"),
+        "template": saved_document.get("template"),
+        "pdf_filename": saved_document.get("pdf_filename"),
+        "created_at": saved_document.get("created_at"),
+        "updated_at": saved_document.get("updated_at")
+    }
 
     return JSONResponse(response_payload)
 
