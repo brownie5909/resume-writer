@@ -5,6 +5,7 @@ from typing import Optional
 from io import BytesIO
 import uuid
 import re
+from routes.resume_documents import router as resume_documents_router
 from datetime import datetime, timedelta
 from pydantic import BaseModel, EmailStr, validator
 
@@ -97,6 +98,11 @@ app.include_router(subscriptions_router, prefix="/api", tags=["Subscription Mana
 app.include_router(interview_router, prefix="/api", tags=["Interview"])
 app.include_router(resume_analysis_router, prefix="/api", tags=["Resume Analysis"])
 app.include_router(cover_letter_router, prefix="/api", tags=["Cover Letter"])
+app.include_router(
+    resume_documents_router,
+    prefix="/api",
+    tags=["Resume Documents"]
+)
 
 
 pdf_store = {}
