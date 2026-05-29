@@ -227,8 +227,7 @@ async def build_resume_response(
 
     pdf_id = str(uuid.uuid4())
     safe_name = data.full_name.replace(" ", "_")
-    "filename": pdf_filename,
-    "document_id": saved_document.get("document_id"),
+    pdf_filename = f"resume_{safe_name}_{template_choice}.pdf"
     
     saved_document = create_resume_document(
         user_id=owner_id,
@@ -238,12 +237,13 @@ async def build_resume_response(
         template=template_choice,
         pdf_filename=pdf_filename
     )
-
+    
     pdf_store[pdf_id] = {
         "data": pdf_bytes,
         "created_at": datetime.now(),
-        "filename": f"resume_{safe_name}_{template_choice}.pdf",
+        "filename": pdf_filename,
         "user_id": owner_id,
+        "document_id": saved_document.get("document_id"),
         "is_guest": False,
         "downloaded": False
     }
