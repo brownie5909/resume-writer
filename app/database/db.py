@@ -27,6 +27,25 @@ def init_database():
                 is_admin BOOLEAN DEFAULT FALSE
             )
         """)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS resume_documents (
+            document_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+    
+            title TEXT NOT NULL,
+    
+            resume_text TEXT,
+            cover_letter_text TEXT,
+    
+            template TEXT DEFAULT 'default',
+            pdf_filename TEXT,
+    
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    """)
         
         # Other tables...
         cursor.execute("""
