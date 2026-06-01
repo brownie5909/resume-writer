@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from app.core.middleware import setup_middleware
 from typing import Optional
 from io import BytesIO
@@ -33,6 +34,8 @@ app = FastAPI(
     description="AI-powered job application tools with user, subscription, resume and PDF management",
     version="2.2.4"
 )
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 setup_middleware(app)
 
