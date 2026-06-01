@@ -78,6 +78,14 @@ async function loadMyResumes() {
       return;
     }
 
+    const resumeCountElement =
+    document.getElementById("resume-count");
+
+    if (resumeCountElement) {
+      resumeCountElement.innerHTML =
+        result.resumes.length;
+    }
+    
     if (!result.resumes || result.resumes.length === 0) {
       status.innerHTML = "You do not have any saved resumes yet.";
       list.innerHTML = "";
@@ -263,6 +271,31 @@ async function deleteResume(documentId, button) {
   }
 }
 
+async function loadDashboardUser() {
+
+  try {
+
+    const response = await fetch(`${API_BASE}/api/auth/me`, {
+      headers: {
+        Authorization: "Bearer " + getToken()
+      }
+    });
+
+    const user = await response.json();
+
+    document.getElementById("dashboard-name").innerHTML =
+      `Welcome ${user.full_name}`;
+
+    document.getElementById("dashboard-tier").innerHTML =
+      `${user.tier.toUpperCase()} PLAN`;
+
+  } catch (error) {
+
+    console.error(error);
+
+  }
+}
+
 function initialiseHireReadyDashboard() {
   const dashboard = document.getElementById("hire-ready-dashboard");
 
@@ -272,16 +305,35 @@ function initialiseHireReadyDashboard() {
   }
 
   dashboard.innerHTML = `
-    <section class="hire-ready-dashboard-wrap">
-      <div class="dashboard-header">
-        <h2>My Resumes</h2>
-        <p>View, download, duplicate and manage your saved resumes.</p>
-      </div>
-      <p id="resume-status">Loading your saved resumes...</p>
-      <div id="resume-list"></div>
-    </section>
-  `;
+  <section class="hire-ready-dashboard-wrap">
 
+    <div class="dashboard-header">
+      <h1 id="dashboard-name">Welcome</h1>
+      <p id="dashboard-tier">Loading account...</p>
+    </div>
+
+    <div class="dashboard-stats">
+      <div class="stat-card">
+        <div class="stat-number" id="resume-count">0</div>
+        <div class="stat-label">Resumes</div>
+      </div>
+    </div>
+
+    <div class="dashboard-actions">
+      <a href="/create-resume/" class="resume-btn">Create Resume</a>
+      <a href="/premium-resume-analysis/" class="resume-btn">Resume Analysis</a>
+    </div>
+
+    <h2>My Resumes</h2>
+
+    <p id="resume-status">Loading your saved resumes...</p>
+
+    <div id="resume-list"></div>
+
+  </section>
+`;
+
+  loadDashboardUser();
   loadMyResumes();
 }
 
