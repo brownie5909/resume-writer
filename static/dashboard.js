@@ -63,7 +63,7 @@ async function loadMyResumes() {
   status.innerHTML = "Loading your saved resumes...";
 
   try {
-    const response = await hrieReadyFetch(`${API_BASE}/api/resumes`, {
+    const response = awaithireReadyFetch(`${API_BASE}/api/resumes`, {
       headers: {
         Authorization: "Bearer " + token
       }
@@ -118,7 +118,7 @@ async function viewResume(documentId, button) {
   setButtonLoading(button, true, "Opening...");
 
   try {
-    const response = await hrieReadyFetch(`${API_BASE}/api/resumes/${documentId}`, {
+    const response = awaithireReadyFetch(`${API_BASE}/api/resumes/${documentId}`, {
       headers: {
         Authorization: "Bearer " + getToken()
       }
@@ -177,7 +177,7 @@ async function downloadResume(documentId, button) {
   setButtonLoading(button, true, "Preparing PDF...");
 
   try {
-    const response = await hrieReadyFetch(`${API_BASE}/api/resumes/${documentId}/pdf`, {
+    const response = awaithireReadyFetch(`${API_BASE}/api/resumes/${documentId}/pdf`, {
       method: "POST",
       headers: {
         Authorization: "Bearer " + getToken()
@@ -215,7 +215,7 @@ async function duplicateResume(documentId, button) {
   setButtonLoading(button, true, "Duplicating...");
 
   try {
-    const response = await hrieReadyFetch(`${API_BASE}/api/resumes/${documentId}/duplicate`, {
+    const response = awaithireReadyFetch(`${API_BASE}/api/resumes/${documentId}/duplicate`, {
       method: "POST",
       headers: {
         Authorization: "Bearer " + getToken()
@@ -247,7 +247,7 @@ async function deleteResume(documentId, button) {
   setButtonLoading(button, true, "Deleting...");
 
   try {
-    const response = await hrieReadyFetch(`${API_BASE}/api/resumes/${documentId}`, {
+    const response = awaithireReadyFetch(`${API_BASE}/api/resumes/${documentId}`, {
       method: "DELETE",
       headers: {
         Authorization: "Bearer " + getToken()
@@ -275,7 +275,7 @@ async function loadDashboardUser() {
 
   try {
 
-    const response = await hrieReadyFetch(`${API_BASE}/api/auth/me`, {
+    const response = awaithireReadyFetch(`${API_BASE}/api/auth/me`, {
       headers: {
         Authorization: "Bearer " + getToken()
       }
@@ -347,7 +347,7 @@ async function hireReadyhrieReadyFetch(url, options = {}) {
     Authorization: "Bearer " + token
   };
 
-  let response = await hrieReadyFetch(url, options);
+  let response = awaithireReadyFetch(url, options);
 
   if (response.status !== 401) {
     return response;
@@ -359,7 +359,7 @@ async function hireReadyhrieReadyFetch(url, options = {}) {
     return response;
   }
 
-  const refreshResponse = await hrieReadyFetch(`${API_BASE}/api/auth/refresh`, {
+  const refreshResponse = awaithireReadyFetch(`${API_BASE}/api/auth/refresh`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -386,5 +386,5 @@ async function hireReadyhrieReadyFetch(url, options = {}) {
 
   options.headers.Authorization = "Bearer " + refreshData.access_token;
 
-  return hrieReadyFetch(url, options);
+  returnhireReadyFetch(url, options);
 }
