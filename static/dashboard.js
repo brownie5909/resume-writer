@@ -44,6 +44,65 @@ function formatDate(value) {
   }
 }
 
+async function hireReadyFetch(url, options = {}) {
+  const token = getToken();
+
+  const firstOptions = {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: "Bearer " + token
+    }
+  };
+
+  let response = await fetch(url, firstOptions);
+
+  if (response.status !== 401) {
+    return response;
+  }
+
+  const refreshToken = localStorage.getItem("hire_ready_refresh_token");
+
+  if (!refreshToken) {
+    return response;
+  }
+
+  const refreshResponse = await fetch(`${API_BASE}/api/auth/refresh`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      refresh_token: refreshToken
+    })
+  });
+
+  if (!refreshResponse.ok) {
+    localStorage.removeItem("hire_ready_token");
+    localStorage.removeItem("hire_ready_refresh_token");
+    localStorage.removeItem("hire_ready_user");
+    localStorage.removeItem("hire_ready_tier");
+    return response;
+  }
+
+  const refreshData = await refreshResponse.json();
+
+  localStorage.setItem("hire_ready_token", refreshData.access_token);
+  localStorage.setItem("hire_ready_refresh_token", refreshData.refresh_token);
+  localStorage.setItem("hire_ready_user", JSON.stringify(refreshData.user));
+  localStorage.setItem("hire_ready_tier", refreshData.user.tier);
+
+  const retryOptions = {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: "Bearer " + refreshData.access_token
+    }
+  };
+
+  return fetch(url, retryOptions);
+}
+
 async function loadMyResumes() {
   const token = getToken();
   const status = document.getElementById("resume-status");
@@ -63,13 +122,9 @@ async function loadMyResumes() {
   status.innerHTML = "Loading your saved resumes...";
 
   try {
-    const response = await hireReadyFetch(`${API_BASE}/api/resumes`, {
-      headers: {
-        Authorization: "Bearer " + token
-      }
-    });
-
+    const response = await hireReadyFetch(`${API_BASE}/api/resumes`);
     const result = await response.json();
+
     console.log("My Resumes Response:", result);
 
     if (!response.ok || !result.success) {
@@ -78,14 +133,12 @@ async function loadMyResumes() {
       return;
     }
 
-    const resumeCountElement =
-    document.getElementById("resume-count");
+    const resumeCountElement = document.getElementById("resume-count");
 
     if (resumeCountElement) {
-      resumeCountElement.innerHTML =
-        result.resumes.length;
+      resumeCountElement.innerHTML = result.resumes.length;
     }
-    
+
     if (!result.resumes || result.resumes.length === 0) {
       status.innerHTML = "You do not have any saved resumes yet.";
       list.innerHTML = "";
@@ -118,12 +171,7 @@ async function viewResume(documentId, button) {
   setButtonLoading(button, true, "Opening...");
 
   try {
-    const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}`, {
-      headers: {
-        Authorization: "Bearer " + getToken()
-      }
-    });
-
+    const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}`);
     const result = await response.json();
 
     if (!response.ok || !result.success) {
@@ -178,10 +226,7 @@ async function downloadResume(documentId, button) {
 
   try {
     const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}/pdf`, {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + getToken()
-      }
+      method: "POST"
     });
 
     if (!response.ok) {
@@ -216,10 +261,7 @@ async function duplicateResume(documentId, button) {
 
   try {
     const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}/duplicate`, {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + getToken()
-      }
+      method: "POST"
     });
 
     const result = await response.json();
@@ -248,10 +290,7 @@ async function deleteResume(documentId, button) {
 
   try {
     const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: "Bearer " + getToken()
-      }
+      method: "DELETE"
     });
 
     const result = await response.json();
@@ -272,27 +311,20 @@ async function deleteResume(documentId, button) {
 }
 
 async function loadDashboardUser() {
-
   try {
-
-    const response = await hireReadyFetch(`${API_BASE}/api/auth/me`, {
-      headers: {
-        Authorization: "Bearer " + getToken()
-      }
-    });
-
+    const response = await hireReadyFetch(`${API_BASE}/api/auth/me`);
     const user = await response.json();
 
-    document.getElementById("dashboard-name").innerHTML =
-      `Welcome ${user.full_name}`;
+    if (!response.ok || !user.user_id) {
+      console.warn("Could not load dashboard user", user);
+      return;
+    }
 
-    document.getElementById("dashboard-tier").innerHTML =
-      `${user.tier.toUpperCase()} PLAN`;
+    document.getElementById("dashboard-name").innerHTML = `Welcome ${escapeHtml(user.full_name)}`;
+    document.getElementById("dashboard-tier").innerHTML = `${escapeHtml(user.tier.toUpperCase())} PLAN`;
 
   } catch (error) {
-
-    console.error(error);
-
+    console.error("Load dashboard user error:", error);
   }
 }
 
@@ -305,86 +337,32 @@ function initialiseHireReadyDashboard() {
   }
 
   dashboard.innerHTML = `
-  <section class="hire-ready-dashboard-wrap">
-
-    <div class="dashboard-header">
-      <h1 id="dashboard-name">Welcome</h1>
-      <p id="dashboard-tier">Loading account...</p>
-    </div>
-
-    <div class="dashboard-stats">
-      <div class="stat-card">
-        <div class="stat-number" id="resume-count">0</div>
-        <div class="stat-label">Resumes</div>
+    <section class="hire-ready-dashboard-wrap">
+      <div class="dashboard-header">
+        <h1 id="dashboard-name">Welcome</h1>
+        <p id="dashboard-tier">Loading account...</p>
       </div>
-    </div>
 
-    <div class="dashboard-actions">
-      <a href="/create-resume/" class="resume-btn">Create Resume</a>
-      <a href="/premium-resume-analysis/" class="resume-btn">Resume Analysis</a>
-    </div>
+      <div class="dashboard-stats">
+        <div class="stat-card">
+          <div class="stat-number" id="resume-count">0</div>
+          <div class="stat-label">Resumes</div>
+        </div>
+      </div>
 
-    <h2>My Resumes</h2>
+      <div class="dashboard-actions">
+        <a href="/create-resume/" class="resume-btn">Create Resume</a>
+        <a href="/premium-resume-analysis/" class="resume-btn">Resume Analysis</a>
+      </div>
 
-    <p id="resume-status">Loading your saved resumes...</p>
-
-    <div id="resume-list"></div>
-
-  </section>
-`;
+      <h2>My Resumes</h2>
+      <p id="resume-status">Loading your saved resumes...</p>
+      <div id="resume-list"></div>
+    </section>
+  `;
 
   loadDashboardUser();
   loadMyResumes();
 }
 
 document.addEventListener("DOMContentLoaded", initialiseHireReadyDashboard);
-
-async function hireReadyFetch(url, options = {}) {
-  let token = getToken();
-
-  options.headers = {
-    ...(options.headers || {}),
-    Authorization: "Bearer " + token
-  };
-
-  let response = await hireReadyFetch(url, options);
-
-  if (response.status !== 401) {
-    return response;
-  }
-
-  const refreshToken = localStorage.getItem("hire_ready_refresh_token");
-
-  if (!refreshToken) {
-    return response;
-  }
-
-  const refreshResponse = await hireReadyFetch(`${API_BASE}/api/auth/refresh`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      refresh_token: refreshToken
-    })
-  });
-
-  if (!refreshResponse.ok) {
-    localStorage.removeItem("hire_ready_token");
-    localStorage.removeItem("hire_ready_refresh_token");
-    localStorage.removeItem("hire_ready_user");
-    localStorage.removeItem("hire_ready_tier");
-    return response;
-  }
-
-  const refreshData = await refreshResponse.json();
-
-  localStorage.setItem("hire_ready_token", refreshData.access_token);
-  localStorage.setItem("hire_ready_refresh_token", refreshData.refresh_token);
-  localStorage.setItem("hire_ready_user", JSON.stringify(refreshData.user));
-  localStorage.setItem("hire_ready_tier", refreshData.user.tier);
-
-  options.headers.Authorization = "Bearer " + refreshData.access_token;
-
-  returnhireReadyFetch(url, options);
-}
