@@ -339,7 +339,7 @@ function initialiseHireReadyDashboard() {
 
 document.addEventListener("DOMContentLoaded", initialiseHireReadyDashboard);
 
-async function hireReadyhrieReadyFetch(url, options = {}) {
+async function hireReadyFetch(url, options = {}) {
   let token = getToken();
 
   options.headers = {
