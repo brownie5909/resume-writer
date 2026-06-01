@@ -338,3 +338,53 @@ function initialiseHireReadyDashboard() {
 }
 
 document.addEventListener("DOMContentLoaded", initialiseHireReadyDashboard);
+
+async function hireReadyFetch(url, options = {}) {
+  let token = getToken();
+
+  options.headers = {
+    ...(options.headers || {}),
+    Authorization: "Bearer " + token
+  };
+
+  let response = await fetch(url, options);
+
+  if (response.status !== 401) {
+    return response;
+  }
+
+  const refreshToken = localStorage.getItem("hire_ready_refresh_token");
+
+  if (!refreshToken) {
+    return response;
+  }
+
+  const refreshResponse = await fetch(`${API_BASE}/api/auth/refresh`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      refresh_token: refreshToken
+    })
+  });
+
+  if (!refreshResponse.ok) {
+    localStorage.removeItem("hire_ready_token");
+    localStorage.removeItem("hire_ready_refresh_token");
+    localStorage.removeItem("hire_ready_user");
+    localStorage.removeItem("hire_ready_tier");
+    return response;
+  }
+
+  const refreshData = await refreshResponse.json();
+
+  localStorage.setItem("hire_ready_token", refreshData.access_token);
+  localStorage.setItem("hire_ready_refresh_token", refreshData.refresh_token);
+  localStorage.setItem("hire_ready_user", JSON.stringify(refreshData.user));
+  localStorage.setItem("hire_ready_tier", refreshData.user.tier);
+
+  options.headers.Authorization = "Bearer " + refreshData.access_token;
+
+  return fetch(url, options);
+}
