@@ -19,6 +19,7 @@ from app.services.admin_setup import auto_create_admin_from_env
 from routes.interview import router as interview_router
 from routes.resume_analysis import router as resume_analysis_router
 from routes.cover_letter import router as cover_letter_router
+from routes.account_recovery import router as account_recovery_router
 from routes.user_management import (
     router as user_management_router,
     get_current_user,
@@ -98,6 +99,7 @@ class ResumeRequest(BaseModel):
 
 
 app.include_router(user_management_router, prefix="/api", tags=["Authentication & Users"])
+app.include_router(account_recovery_router, prefix="/api", tags=["Account Recovery"])
 app.include_router(admin_router, prefix="/api", tags=["Admin Management"])
 app.include_router(subscriptions_router, prefix="/api", tags=["Subscription Management"])
 app.include_router(interview_router, prefix="/api", tags=["Interview"])
