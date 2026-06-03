@@ -145,17 +145,16 @@ def prune_resume_versions(user_id: str, document_id: str, max_versions: Optional
         rows = cursor.fetchall()
         version_ids_to_delete = [row["version_id"] for row in rows[max_versions:]]
 
-        if version_ids_to_delete:
-            cursor.executemany(
+        for version_id in version_ids_to_delete:
+            cursor.execute(
                 """
                 DELETE FROM resume_versions
                 WHERE user_id = ? AND document_id = ? AND version_id = ?
                 """,
-                [
-                    (user_id, document_id, version_id)
-                    for version_id in version_ids_to_delete
-                ],
+                (user_id, document_id, version_id),
             )
+
+        if version_ids_to_delete:
             conn.commit()
 
 
