@@ -166,6 +166,30 @@ def init_database():
         _execute_schema(
             cursor,
             """
+            CREATE TABLE IF NOT EXISTS resume_analysis_results (
+                analysis_id TEXT PRIMARY KEY,
+                document_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                original_filename TEXT,
+                original_content_type TEXT,
+                original_file_base64 TEXT,
+                original_resume_text TEXT,
+                target_role TEXT,
+                analysis_json TEXT,
+                overall_score INTEGER,
+                ats_score INTEGER,
+                improved_resume TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (document_id) REFERENCES resume_documents (document_id),
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+            """
+        )
+
+        _execute_schema(
+            cursor,
+            """
             CREATE TABLE IF NOT EXISTS user_sessions (
                 session_id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
