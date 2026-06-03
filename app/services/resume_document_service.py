@@ -126,6 +126,39 @@ def create_resume_version(existing_resume: Dict) -> Optional[Dict]:
     )
 
 
+def prune_resume_versions(user_id: str, document_id: str, max_versions: Optional[int]) -> None:
+    """Keep only the newest max_versions snapshots for a resume."""
+    if max_versions is None or max_versions < 0:
+        return
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT version_id
+            FROM resume_versions
+            WHERE user_id = ? AND document_id = ?
+            ORDER BY created_at DESC
+            """,
+            (user_id, document_id),
+        )
+        rows = cursor.fetchall()
+        version_ids_to_delete = [row["version_id"] for row in rows[max_versions:]]
+
+        if version_ids_to_delete:
+            cursor.executemany(
+                """
+                DELETE FROM resume_versions
+                WHERE user_id = ? AND document_id = ? AND version_id = ?
+                """,
+                [
+                    (user_id, document_id, version_id)
+                    for version_id in version_ids_to_delete
+                ],
+            )
+            conn.commit()
+
+
 def get_resume_version(user_id: str, document_id: str, version_id: str) -> Optional[Dict]:
     """Return one version snapshot owned by the user."""
     with get_db() as conn:
@@ -170,7 +203,8 @@ def update_resume_document(
     cover_letter_text: Optional[str] = None,
     template: Optional[str] = None,
     pdf_filename: Optional[str] = None,
-    save_version: bool = True
+    save_version: bool = True,
+    max_versions: Optional[int] = None
 ) -> Optional[Dict]:
     """Update editable saved resume fields and optionally snapshot the previous version."""
     existing = get_resume_document(user_id=user_id, document_id=document_id)
@@ -192,6 +226,7 @@ def update_resume_document(
 
     if save_version and has_editable_changes:
         create_resume_version(existing)
+        prune_resume_versions(user_id=user_id, document_id=document_id, max_versions=max_versions)
 
     with get_db() as conn:
         cursor = conn.cursor()
