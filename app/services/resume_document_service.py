@@ -169,20 +169,29 @@ def update_resume_document(
     resume_text: Optional[str] = None,
     cover_letter_text: Optional[str] = None,
     template: Optional[str] = None,
-    pdf_filename: Optional[str] = None
+    pdf_filename: Optional[str] = None,
+    save_version: bool = True
 ) -> Optional[Dict]:
-    """Update editable saved resume fields."""
+    """Update editable saved resume fields and optionally snapshot the previous version."""
     existing = get_resume_document(user_id=user_id, document_id=document_id)
     if not existing:
         return None
-
-    create_resume_version(existing)
 
     new_title = title if title is not None else existing["title"]
     new_resume_text = resume_text if resume_text is not None else existing["resume_text"]
     new_cover_letter_text = cover_letter_text if cover_letter_text is not None else existing.get("cover_letter_text", "")
     new_template = template if template is not None else existing.get("template", "default")
     new_pdf_filename = pdf_filename if pdf_filename is not None else existing.get("pdf_filename")
+
+    has_editable_changes = any([
+        new_title != existing.get("title"),
+        new_resume_text != existing.get("resume_text"),
+        new_cover_letter_text != existing.get("cover_letter_text", ""),
+        new_template != existing.get("template", "default"),
+    ])
+
+    if save_version and has_editable_changes:
+        create_resume_version(existing)
 
     with get_db() as conn:
         cursor = conn.cursor()
