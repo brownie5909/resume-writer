@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from app.utils.file_parser import extract_text_from_file
 from app.services.openai_service import analyze_resume_with_ai
@@ -87,11 +88,11 @@ async def analyze_resume(
         if not usage_status["can_run"]:
             return JSONResponse(
                 status_code=403,
-                content={
+                content=jsonable_encoder({
                     "success": False,
                     "error": usage_status["message"],
                     **usage_status,
-                },
+                }),
             )
 
         validate_file(file)
@@ -153,7 +154,7 @@ async def analyze_resume(
 
         updated_usage_status = can_run_resume_analysis(current_user)
 
-        return JSONResponse({
+        response_payload = {
             "success": True,
             "analysis": analysis,
             "improved_resume": improved_resume,
@@ -174,7 +175,9 @@ async def analyze_resume(
                 "filename": file.filename,
                 "characters_extracted": len(text_content)
             }
-        })
+        }
+
+        return JSONResponse(content=jsonable_encoder(response_payload))
 
     except HTTPException:
         raise
