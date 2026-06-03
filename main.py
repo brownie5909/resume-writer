@@ -188,12 +188,61 @@ def check_pdf_download_limit(user_id: str) -> bool:
         return current_usage < limit
 
 
+def count_saved_resumes(user_id: str) -> int:
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS resume_count
+            FROM resume_documents
+            WHERE user_id = ?
+            """,
+            (user_id,)
+        )
+        result = cursor.fetchone()
+        return int(result["resume_count"] if result else 0)
+
+
+def get_saved_resume_limit(current_user: dict) -> Optional[int]:
+    if bool(current_user.get("is_admin")):
+        return None
+
+    user_tier = get_user_tier_enhanced(current_user["user_id"])
+    if user_tier.value in ("premium", "professional"):
+        return None
+
+    return 1
+
+
+def check_saved_resume_limit(current_user: dict) -> bool:
+    limit = get_saved_resume_limit(current_user)
+    if limit is None or limit < 0:
+        return True
+
+    return count_saved_resumes(current_user["user_id"]) < limit
+
+
 async def build_resume_response(
     resume_request: ResumeRequest,
     owner_id: Optional[str] = None,
-    is_guest: bool = False
+    is_guest: bool = False,
+    current_user: Optional[dict] = None
 ):
     clean_pdf_store()
+
+    if not is_guest and current_user and not check_saved_resume_limit(current_user):
+        user_tier = get_user_tier_enhanced(current_user["user_id"])
+        return JSONResponse(
+            status_code=403,
+            content={
+                "success": False,
+                "error": "Saved resume limit reached for your current plan",
+                "upgrade_required": True,
+                "current_tier": "basic" if user_tier.value == "free" else user_tier.value,
+                "saved_resume_limit": get_saved_resume_limit(current_user),
+                "upgrade_url": "/pricing"
+            }
+        )
 
     data = resume_request.data
     template_choice = resume_request.template_choice
@@ -291,7 +340,8 @@ async def generate_resume(resume_request: ResumeRequest, current_user: dict = De
         return await build_resume_response(
             resume_request=resume_request,
             owner_id=current_user["user_id"],
-            is_guest=False
+            is_guest=False,
+            current_user=current_user
         )
     except Exception as error:
         print(f"❌ Resume generation error: {str(error)}")
