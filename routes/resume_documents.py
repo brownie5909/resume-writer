@@ -13,6 +13,7 @@ from app.services.resume_document_service import (
     update_resume_document,
     duplicate_resume_document,
     delete_resume_document,
+    list_resume_versions,
 )
 
 router = APIRouter()
@@ -108,7 +109,17 @@ async def view_resume(document_id: str, current_user: dict = Depends(get_current
         "success": True,
         "resume": document,
     }
+@router.get("/resumes/{document_id}/versions")
+async def resume_versions(document_id: str, current_user: dict = Depends(get_current_user)):
+    """List version history for one saved resume."""
+    document = get_resume_document(current_user["user_id"], document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Resume document not found")
 
+    return {
+        "success": True,
+        "versions": list_resume_versions(current_user["user_id"], document_id),
+    }
 
 @router.put("/resumes/{document_id}")
 async def update_resume(
