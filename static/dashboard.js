@@ -1,6 +1,7 @@
 console.log("Hire Ready dashboard.js loaded");
 
 const API_BASE = "https://resume-writer.onrender.com";
+let currentEditingDocumentId = null;
 
 function getToken() {
   return localStorage.getItem("hire_ready_token");
@@ -154,6 +155,7 @@ async function loadMyResumes() {
 
         <div class="resume-actions">
           <button class="resume-btn" onclick="viewResume('${resume.document_id}', this)">View</button>
+          <button class="resume-btn" onclick="editResume('${resume.document_id}', this)">Edit</button>
           <button class="resume-btn" onclick="downloadResume('${resume.document_id}', this)">Download PDF</button>
           <button class="resume-btn" onclick="duplicateResume('${resume.document_id}', this)">Duplicate</button>
           <button class="resume-btn resume-btn-danger" onclick="deleteResume('${resume.document_id}', this)">Delete</button>
@@ -216,6 +218,108 @@ async function viewResume(documentId, button) {
   } catch (error) {
     console.error("View resume error:", error);
     alert("Something went wrong opening this resume.");
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+async function editResume(documentId, button) {
+  setButtonLoading(button, true, "Loading...");
+
+  try {
+    const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}`);
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      alert("Could not load this resume for editing.");
+      return;
+    }
+
+    const resume = result.resume;
+    currentEditingDocumentId = documentId;
+
+    document.getElementById("edit-title").value = resume.title || "";
+    document.getElementById("edit-template").value = resume.template || "default";
+    document.getElementById("edit-resume-text").value = resume.resume_text || "";
+    document.getElementById("edit-cover-letter-text").value = resume.cover_letter_text || "";
+    document.getElementById("edit-modal-status").innerHTML = "";
+
+    openEditModal();
+
+  } catch (error) {
+    console.error("Edit resume error:", error);
+    alert("Something went wrong loading this resume.");
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+function openEditModal() {
+  const modal = document.getElementById("resume-edit-modal");
+  if (modal) {
+    modal.classList.add("active");
+    document.body.classList.add("resume-modal-open");
+  }
+}
+
+function closeEditModal() {
+  const modal = document.getElementById("resume-edit-modal");
+  if (modal) {
+    modal.classList.remove("active");
+    document.body.classList.remove("resume-modal-open");
+  }
+  currentEditingDocumentId = null;
+}
+
+async function saveEditedResume(button) {
+  if (!currentEditingDocumentId) {
+    alert("No resume is currently selected for editing.");
+    return;
+  }
+
+  const status = document.getElementById("edit-modal-status");
+  const title = document.getElementById("edit-title").value.trim();
+  const template = document.getElementById("edit-template").value.trim() || "default";
+  const resumeText = document.getElementById("edit-resume-text").value;
+  const coverLetterText = document.getElementById("edit-cover-letter-text").value;
+
+  if (!title) {
+    status.innerHTML = "Please enter a resume title.";
+    return;
+  }
+
+  setButtonLoading(button, true, "Saving...");
+  status.innerHTML = "Saving changes...";
+
+  try {
+    const response = await hireReadyFetch(`${API_BASE}/api/resumes/${currentEditingDocumentId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: title,
+        template: template,
+        resume_text: resumeText,
+        cover_letter_text: coverLetterText
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      console.error("Save resume error:", result);
+      status.innerHTML = "Could not save resume changes.";
+      return;
+    }
+
+    status.innerHTML = "Saved successfully.";
+    closeEditModal();
+    await loadMyResumes();
+
+  } catch (error) {
+    console.error("Save edited resume error:", error);
+    status.innerHTML = "Error saving resume changes.";
   } finally {
     setButtonLoading(button, false);
   }
@@ -358,6 +462,40 @@ function initialiseHireReadyDashboard() {
       <h2>My Resumes</h2>
       <p id="resume-status">Loading your saved resumes...</p>
       <div id="resume-list"></div>
+
+      <div id="resume-edit-modal" class="resume-edit-modal" aria-hidden="true">
+        <div class="resume-edit-modal-backdrop" onclick="closeEditModal()"></div>
+        <div class="resume-edit-modal-panel" role="dialog" aria-modal="true" aria-label="Edit resume">
+          <div class="resume-edit-modal-header">
+            <h2>Edit Resume</h2>
+            <button class="resume-modal-close" onclick="closeEditModal()" aria-label="Close edit modal">×</button>
+          </div>
+
+          <label class="resume-edit-label" for="edit-title">Resume Title</label>
+          <input id="edit-title" class="resume-edit-input" type="text">
+
+          <label class="resume-edit-label" for="edit-template">Template</label>
+          <select id="edit-template" class="resume-edit-input">
+            <option value="default">Default</option>
+            <option value="conservative">Conservative</option>
+            <option value="creative">Creative</option>
+            <option value="executive">Executive</option>
+          </select>
+
+          <label class="resume-edit-label" for="edit-resume-text">Resume Text</label>
+          <textarea id="edit-resume-text" class="resume-edit-textarea" rows="16"></textarea>
+
+          <label class="resume-edit-label" for="edit-cover-letter-text">Cover Letter Text</label>
+          <textarea id="edit-cover-letter-text" class="resume-edit-textarea" rows="10"></textarea>
+
+          <p id="edit-modal-status" class="edit-modal-status"></p>
+
+          <div class="resume-edit-modal-actions">
+            <button class="resume-btn" onclick="saveEditedResume(this)">Save Changes</button>
+            <button class="resume-btn resume-btn-secondary" onclick="closeEditModal()">Cancel</button>
+          </div>
+        </div>
+      </div>
     </section>
   `;
 
