@@ -13,7 +13,7 @@ def create_resume_document(
     resume_text: str,
     cover_letter_text: Optional[str] = None,
     template: str = "default",
-    pdf_filename: Optional[str] = None,
+    pdf_filename: Optional[str] = None
 ) -> Dict:
     """Create a persistent saved resume document for an authenticated user."""
     document_id = str(uuid.uuid4())
@@ -85,6 +85,83 @@ def get_resume_document(user_id: str, document_id: str) -> Optional[Dict]:
         return row_to_dict(cursor.fetchone())
 
 
+def create_resume_version(existing_resume: Dict) -> Optional[Dict]:
+    """Create a snapshot of a resume before it is edited."""
+    if not existing_resume:
+        return None
+
+    version_id = str(uuid.uuid4())
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO resume_versions (
+                version_id,
+                document_id,
+                user_id,
+                title,
+                resume_text,
+                cover_letter_text,
+                template
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                version_id,
+                existing_resume.get("document_id"),
+                existing_resume.get("user_id"),
+                existing_resume.get("title", ""),
+                existing_resume.get("resume_text", ""),
+                existing_resume.get("cover_letter_text", ""),
+                existing_resume.get("template", "default"),
+            ),
+        )
+        conn.commit()
+
+    return get_resume_version(
+        user_id=existing_resume.get("user_id"),
+        document_id=existing_resume.get("document_id"),
+        version_id=version_id,
+    )
+
+
+def get_resume_version(user_id: str, document_id: str, version_id: str) -> Optional[Dict]:
+    """Return one version snapshot owned by the user."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM resume_versions
+            WHERE user_id = ? AND document_id = ? AND version_id = ?
+            """,
+            (user_id, document_id, version_id),
+        )
+        return row_to_dict(cursor.fetchone())
+
+
+def list_resume_versions(user_id: str, document_id: str) -> List[Dict]:
+    """Return version snapshots for a saved resume, newest first."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                version_id,
+                document_id,
+                user_id,
+                title,
+                template,
+                created_at
+            FROM resume_versions
+            WHERE user_id = ? AND document_id = ?
+            ORDER BY created_at DESC
+            """,
+            (user_id, document_id),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
 def update_resume_document(
     user_id: str,
     document_id: str,
@@ -92,12 +169,13 @@ def update_resume_document(
     resume_text: Optional[str] = None,
     cover_letter_text: Optional[str] = None,
     template: Optional[str] = None,
-    pdf_filename: Optional[str] = None,
+    pdf_filename: Optional[str] = None
 ) -> Optional[Dict]:
     """Update editable saved resume fields."""
     existing = get_resume_document(user_id=user_id, document_id=document_id)
     if not existing:
         return None
+
     create_resume_version(existing)
 
     new_title = title if title is not None else existing["title"]
@@ -163,5 +241,3 @@ def delete_resume_document(user_id: str, document_id: str) -> bool:
         )
         conn.commit()
         return cursor.rowcount > 0
-        
-def create_resume_version(existing_resume):
