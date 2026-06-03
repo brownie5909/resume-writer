@@ -156,7 +156,23 @@ def user_response(user: Dict) -> UserResponse:
     )
 
 
+def email_exists(email: str) -> bool:
+    """Check if an email already exists, including inactive accounts."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id FROM users WHERE email = ?", (email.lower(),))
+        return cursor.fetchone() is not None
+
+
 def create_user_db(user_data: UserCreate) -> str:
+    normalized_email = user_data.email.lower()
+
+    if email_exists(normalized_email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+
     user_id = str(uuid.uuid4())
     password_hash = get_password_hash(user_data.password)
 
@@ -166,7 +182,7 @@ def create_user_db(user_data: UserCreate) -> str:
             cursor.execute("""
                 INSERT INTO users (user_id, email, password_hash, full_name, tier)
                 VALUES (?, ?, ?, ?, ?)
-            """, (user_id, user_data.email.lower(), password_hash, user_data.full_name, UserTier.BASIC.value))
+            """, (user_id, normalized_email, password_hash, user_data.full_name, UserTier.BASIC.value))
             conn.commit()
             return user_id
         except sqlite3.IntegrityError:
@@ -174,6 +190,14 @@ def create_user_db(user_data: UserCreate) -> str:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
             )
+        except Exception as e:
+            error_text = str(e).lower()
+            if "duplicate" in error_text or "unique" in error_text or "users_email_key" in error_text:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email already registered"
+                )
+            raise
 
 
 def get_user_by_email(email: str) -> Optional[Dict]:
