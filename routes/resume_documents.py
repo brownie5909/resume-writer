@@ -39,6 +39,18 @@ def get_version_limit_for_user(current_user: dict) -> Optional[int]:
     return 1
 
 
+def get_saved_resume_limit_for_user(current_user: dict) -> Optional[int]:
+    """Return the maximum saved resumes for the user's access level."""
+    if bool(current_user.get("is_admin")):
+        return None
+
+    user_tier = get_user_tier_enhanced(current_user["user_id"])
+    if user_tier.value in ("premium", "professional"):
+        return None
+
+    return 1
+
+
 def track_pdf_usage(user_id: str):
     from datetime import datetime
 
@@ -108,6 +120,27 @@ async def my_resumes(current_user: dict = Depends(get_current_user)):
     return {
         "success": True,
         "resumes": list_resume_documents(current_user["user_id"]),
+    }
+
+
+@router.get("/resumes/can-create")
+async def can_create_resume(current_user: dict = Depends(get_current_user)):
+    """Return whether the authenticated user can create another saved resume."""
+    saved_resumes = list_resume_documents(current_user["user_id"])
+    current_count = len(saved_resumes)
+    saved_resume_limit = get_saved_resume_limit_for_user(current_user)
+    can_create = saved_resume_limit is None or current_count < saved_resume_limit
+    user_tier = get_user_tier_enhanced(current_user["user_id"])
+
+    return {
+        "success": True,
+        "can_create": can_create,
+        "current_count": current_count,
+        "saved_resume_limit": saved_resume_limit,
+        "current_tier": "basic" if user_tier.value == "free" else user_tier.value,
+        "message": "You can create another resume." if can_create else "Your Basic plan includes 1 saved resume. Edit your existing resume or upgrade to save more resumes.",
+        "upgrade_required": not can_create,
+        "upgrade_url": "/pricing" if not can_create else None,
     }
 
 
@@ -226,6 +259,20 @@ async def restore_resume_version(
 @router.post("/resumes/{document_id}/duplicate")
 async def duplicate_resume(document_id: str, current_user: dict = Depends(get_current_user)):
     """Duplicate a saved resume document."""
+    saved_resumes = list_resume_documents(current_user["user_id"])
+    saved_resume_limit = get_saved_resume_limit_for_user(current_user)
+    if saved_resume_limit is not None and len(saved_resumes) >= saved_resume_limit:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "Saved resume limit reached for your current plan",
+                "upgrade_required": True,
+                "current_count": len(saved_resumes),
+                "saved_resume_limit": saved_resume_limit,
+                "upgrade_url": "/pricing",
+            },
+        )
+
     document = duplicate_resume_document(current_user["user_id"], document_id)
     if not document:
         raise HTTPException(status_code=404, detail="Resume document not found")
