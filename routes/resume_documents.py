@@ -14,6 +14,7 @@ from app.services.resume_document_service import (
     duplicate_resume_document,
     delete_resume_document,
     list_resume_versions,
+    get_resume_version,
 )
 
 router = APIRouter()
@@ -24,6 +25,18 @@ class ResumeDocumentUpdate(BaseModel):
     resume_text: Optional[str] = None
     cover_letter_text: Optional[str] = None
     template: Optional[str] = None
+
+
+def get_version_limit_for_user(current_user: dict) -> Optional[int]:
+    """Return the maximum stored resume versions for the user's access level."""
+    if bool(current_user.get("is_admin")):
+        return None
+
+    user_tier = get_user_tier_enhanced(current_user["user_id"])
+    if user_tier.value in ("premium", "professional"):
+        return None
+
+    return 1
 
 
 def track_pdf_usage(user_id: str):
@@ -109,6 +122,8 @@ async def view_resume(document_id: str, current_user: dict = Depends(get_current
         "success": True,
         "resume": document,
     }
+
+
 @router.get("/resumes/{document_id}/versions")
 async def resume_versions(document_id: str, current_user: dict = Depends(get_current_user)):
     """List version history for one saved resume."""
@@ -116,10 +131,38 @@ async def resume_versions(document_id: str, current_user: dict = Depends(get_cur
     if not document:
         raise HTTPException(status_code=404, detail="Resume document not found")
 
+    max_versions = get_version_limit_for_user(current_user)
+    versions = list_resume_versions(current_user["user_id"], document_id)
+    if max_versions is not None:
+        versions = versions[:max_versions]
+
     return {
         "success": True,
-        "versions": list_resume_versions(current_user["user_id"], document_id),
+        "versions": versions,
+        "version_limit": max_versions,
     }
+
+
+@router.get("/resumes/{document_id}/versions/{version_id}")
+async def view_resume_version(
+    document_id: str,
+    version_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """View one previous resume version."""
+    document = get_resume_document(current_user["user_id"], document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Resume document not found")
+
+    version = get_resume_version(current_user["user_id"], document_id, version_id)
+    if not version:
+        raise HTTPException(status_code=404, detail="Resume version not found")
+
+    return {
+        "success": True,
+        "version": version,
+    }
+
 
 @router.put("/resumes/{document_id}")
 async def update_resume(
@@ -135,6 +178,7 @@ async def update_resume(
         resume_text=update_data.resume_text,
         cover_letter_text=update_data.cover_letter_text,
         template=update_data.template,
+        max_versions=get_version_limit_for_user(current_user),
     )
 
     if not document:
@@ -144,6 +188,38 @@ async def update_resume(
         "success": True,
         "message": "Resume updated successfully",
         "resume": document,
+    }
+
+
+@router.post("/resumes/{document_id}/versions/{version_id}/restore")
+async def restore_resume_version(
+    document_id: str,
+    version_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Restore a saved resume from a previous version."""
+    document = get_resume_document(current_user["user_id"], document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Resume document not found")
+
+    version = get_resume_version(current_user["user_id"], document_id, version_id)
+    if not version:
+        raise HTTPException(status_code=404, detail="Resume version not found")
+
+    restored_document = update_resume_document(
+        user_id=current_user["user_id"],
+        document_id=document_id,
+        title=version.get("title"),
+        resume_text=version.get("resume_text"),
+        cover_letter_text=version.get("cover_letter_text"),
+        template=version.get("template"),
+        max_versions=get_version_limit_for_user(current_user),
+    )
+
+    return {
+        "success": True,
+        "message": "Resume version restored successfully",
+        "resume": restored_document,
     }
 
 
