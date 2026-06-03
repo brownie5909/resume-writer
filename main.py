@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.encoders import jsonable_encoder
 from fastapi.staticfiles import StaticFiles
 from app.core.middleware import setup_middleware
 from typing import Optional
@@ -221,7 +222,7 @@ async def build_resume_response(
     }
 
     if is_guest:
-        return JSONResponse(response_payload)
+        return JSONResponse(content=jsonable_encoder(response_payload))
 
     pdf_bytes = generate_resume_pdf(
         resume_text=resume_text,
@@ -231,7 +232,7 @@ async def build_resume_response(
     pdf_id = str(uuid.uuid4())
     safe_name = data.full_name.replace(" ", "_")
     pdf_filename = f"resume_{safe_name}_{template_choice}.pdf"
-    
+
     saved_document = create_resume_document(
         user_id=owner_id,
         title=f"{data.full_name} - {data.job_title}",
@@ -240,7 +241,7 @@ async def build_resume_response(
         template=template_choice,
         pdf_filename=pdf_filename
     )
-    
+
     pdf_store[pdf_id] = {
         "data": pdf_bytes,
         "created_at": datetime.now(),
@@ -263,7 +264,7 @@ async def build_resume_response(
         "updated_at": saved_document.get("updated_at")
     }
 
-    return JSONResponse(response_payload)
+    return JSONResponse(content=jsonable_encoder(response_payload))
 
 
 @app.post("/api/generate-resume-guest")
