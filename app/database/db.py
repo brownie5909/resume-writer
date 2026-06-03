@@ -195,6 +195,21 @@ def init_database():
             """
         )
 
+        _execute_schema(
+            cursor,
+            """
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                reset_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                token_hash TEXT NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                used_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+            """
+        )
+
         conn.commit()
 
 
