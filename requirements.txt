@@ -12,3 +12,4 @@ aiohttp
 PyPDF2
 python-docx
 reportlab
+psycopg2-binary
