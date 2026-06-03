@@ -1,0 +1,267 @@
+.analysis-wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px 0 40px;
+}
+
+.analysis-hero {
+  background: linear-gradient(135deg, #eef6ff, #ffffff);
+  border: 1px solid #d9eaff;
+  border-radius: 18px;
+  padding: 30px;
+  margin-bottom: 22px;
+}
+
+.analysis-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1e73be;
+  margin: 0 0 8px;
+}
+
+.analysis-hero h1 {
+  margin: 0 0 12px;
+  color: #101828;
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1.08;
+}
+
+.analysis-hero p {
+  margin: 0;
+  color: #475467;
+  font-size: 17px;
+  max-width: 760px;
+}
+
+.analysis-notice {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  font-weight: 650;
+  display: none;
+}
+
+.analysis-notice:not(:empty) {
+  display: block;
+}
+
+.analysis-notice.info {
+  background: #eff8ff;
+  color: #175cd3;
+  border: 1px solid #b2ddff;
+}
+
+.analysis-notice.success {
+  background: #ecfdf3;
+  color: #027a48;
+  border: 1px solid #abefc6;
+}
+
+.analysis-notice.warning {
+  background: #fffaeb;
+  color: #93370d;
+  border: 1px solid #fedf89;
+}
+
+.analysis-notice.error {
+  background: #fef3f2;
+  color: #b42318;
+  border: 1px solid #fecdca;
+}
+
+.analysis-inline-link {
+  color: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.analysis-form,
+.analysis-results-card {
+  background: #ffffff;
+  border: 1px solid #e4e7ec;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.analysis-form label {
+  display: block;
+  margin-top: 16px;
+  margin-bottom: 7px;
+  font-weight: 800;
+  color: #344054;
+}
+
+.analysis-form label:first-child {
+  margin-top: 0;
+}
+
+.analysis-form input[type="file"],
+.analysis-form input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font: inherit;
+  background: #ffffff;
+}
+
+.analysis-form input[type="file"] {
+  padding: 11px;
+}
+
+.analysis-form input:focus {
+  outline: none;
+  border-color: #1e73be;
+  box-shadow: 0 0 0 3px rgba(30, 115, 190, 0.15);
+}
+
+.analysis-help {
+  margin: 7px 0 0;
+  color: #667085;
+  font-size: 14px;
+}
+
+.analysis-btn {
+  display: inline-block;
+  background: #1e73be;
+  color: #ffffff !important;
+  border: none;
+  padding: 12px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 18px;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.analysis-btn:hover {
+  background: #155a94;
+  transform: translateY(-1px);
+}
+
+.analysis-btn:active {
+  transform: scale(0.97);
+}
+
+.analysis-btn.loading,
+.analysis-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.analysis-btn-secondary {
+  background: #667085;
+  margin-top: 8px;
+}
+
+.analysis-btn-secondary:hover {
+  background: #475467;
+}
+
+.analysis-results {
+  margin-top: 24px;
+}
+
+.analysis-score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.analysis-score-card {
+  background: #f5f7fa;
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  padding: 18px;
+  text-align: center;
+}
+
+.analysis-score-card span {
+  display: block;
+  font-size: 36px;
+  line-height: 1;
+  font-weight: 900;
+  color: #1e73be;
+}
+
+.analysis-score-card small {
+  display: block;
+  margin-top: 8px;
+  color: #475467;
+  font-weight: 750;
+}
+
+.analysis-saved-box {
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
+  color: #027a48;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 22px;
+}
+
+.analysis-saved-box p {
+  margin: 6px 0 0;
+}
+
+.analysis-results-card h3 {
+  margin-top: 24px;
+  margin-bottom: 10px;
+  color: #101828;
+}
+
+.analysis-results-card h3:first-child {
+  margin-top: 0;
+}
+
+.analysis-results-card ul {
+  margin-top: 8px;
+  padding-left: 22px;
+}
+
+.analysis-results-card li {
+  margin-bottom: 8px;
+  color: #344054;
+}
+
+.analysis-improved-resume {
+  white-space: pre-wrap;
+  font-family: Arial, sans-serif;
+  line-height: 1.55;
+  background: #f9fafb;
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  padding: 16px;
+  overflow-x: auto;
+  max-height: 620px;
+  overflow-y: auto;
+}
+
+@media (max-width: 700px) {
+  .analysis-wrap {
+    padding: 12px 0 30px;
+  }
+
+  .analysis-hero,
+  .analysis-form,
+  .analysis-results-card {
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .analysis-score-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-btn {
+    width: 100%;
+    text-align: center;
+  }
+}
