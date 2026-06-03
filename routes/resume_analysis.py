@@ -1,9 +1,15 @@
-# Copy this EXACTLY into: routes/resume_analysis.py
-
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from app.utils.file_parser import extract_text_from_file
 from app.services.openai_service import analyze_resume_with_ai
+from app.services.resume_analysis_service import (
+    can_run_resume_analysis,
+    create_or_update_analysis_resume_document,
+    increment_resume_analysis_usage,
+    prune_basic_analysis_results,
+    save_resume_analysis_result,
+)
+from routes.user_management import get_current_user
 import os
 from typing import Optional
 
@@ -23,13 +29,10 @@ ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".rtf"}
 
 
 def validate_file(file: UploadFile) -> None:
-    """Comprehensive file validation"""
-
-    # Check if file exists
+    """Comprehensive file validation."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
-    # Check file extension
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -37,7 +40,6 @@ def validate_file(file: UploadFile) -> None:
             detail=f"Invalid file type. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
         )
 
-    # Check MIME type if provided
     if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=400,
@@ -45,24 +47,55 @@ def validate_file(file: UploadFile) -> None:
         )
 
 
+def build_analysis_payload(ai_result: dict) -> dict:
+    """Build the stable analysis payload returned to the frontend and saved to the database."""
+    return {
+        "overall_score": ai_result.get("overall_score", 70),
+        "ats_score": ai_result.get("ats_score", 70),
+        "formatting_score": ai_result.get("formatting_score", 70),
+        "strengths": ai_result.get("strengths", []),
+        "weaknesses": ai_result.get("weaknesses", []),
+        "keyword_analysis": ai_result.get("keyword_analysis", {}),
+        "sections_analysis": ai_result.get("sections_analysis", {}),
+        "specific_improvements": ai_result.get("specific_improvements", []),
+        "ats_recommendations": ai_result.get("ats_recommendations", [])
+    }
+
+
+@router.get("/resume-analysis/can-run")
+async def can_run_analysis(current_user: dict = Depends(get_current_user)):
+    """Return whether the authenticated user can run another resume analysis this month."""
+    usage_status = can_run_resume_analysis(current_user)
+    return {
+        "success": True,
+        **usage_status,
+    }
+
+
 @router.post("/analyze-resume")
 async def analyze_resume(
     file: UploadFile = File(...),
     target_role: Optional[str] = Form(None),
-    user_id: Optional[str] = Form(None)
+    current_user: dict = Depends(get_current_user),
 ):
-    """
-    Resume analysis with real parsing and OpenAI ATS analysis
-    """
-
+    """Resume analysis with parsing, tier usage enforcement, persistence and editable resume creation."""
     try:
         print(f"🔬 Starting analysis for file: {file.filename}")
         print(f"🎯 Target role: {target_role}")
 
-        # Validate file metadata
+        usage_status = can_run_resume_analysis(current_user)
+        if not usage_status["can_run"]:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "success": False,
+                    "error": usage_status["message"],
+                    **usage_status,
+                },
+            )
+
         validate_file(file)
 
-        # Read file content for size validation
         file_bytes = await file.read()
 
         if not file_bytes:
@@ -74,10 +107,8 @@ async def analyze_resume(
                 detail=f"File too large. Max size: {MAX_FILE_SIZE // (1024 * 1024)}MB"
             )
 
-        # Reset stream so parser can read the file again
         await file.seek(0)
 
-        # Extract real resume text
         text_content = await extract_text_from_file(file)
 
         if not text_content or len(text_content.strip()) < 50:
@@ -91,29 +122,51 @@ async def analyze_resume(
 
         print(f"📄 Extracted resume text length: {len(text_content)}")
 
-        # Real AI analysis
         ai_result = await analyze_resume_with_ai(
             resume_text=text_content,
             target_role=target_role
         )
 
+        analysis = build_analysis_payload(ai_result)
+        improved_resume = ai_result.get("improved_resume", "No improved resume generated.")
+        resume_title = f"Analysed Resume - {target_role}" if target_role else f"Analysed Resume - {file.filename}"
+
+        saved_document = create_or_update_analysis_resume_document(
+            current_user=current_user,
+            title=resume_title,
+            improved_resume=improved_resume,
+        )
+
+        saved_analysis = save_resume_analysis_result(
+            user_id=current_user["user_id"],
+            document_id=saved_document["document_id"],
+            original_filename=file.filename,
+            original_content_type=file.content_type or "",
+            original_resume_text=text_content,
+            target_role=target_role,
+            analysis=analysis,
+            improved_resume=improved_resume,
+        )
+
+        prune_basic_analysis_results(current_user=current_user, keep_latest=1)
+        increment_resume_analysis_usage(current_user["user_id"])
+
+        updated_usage_status = can_run_resume_analysis(current_user)
+
         return JSONResponse({
             "success": True,
-            "analysis": {
-                "overall_score": ai_result.get("overall_score", 70),
-                "ats_score": ai_result.get("ats_score", 70),
-                "formatting_score": ai_result.get("formatting_score", 70),
-                "strengths": ai_result.get("strengths", []),
-                "weaknesses": ai_result.get("weaknesses", []),
-                "keyword_analysis": ai_result.get("keyword_analysis", {}),
-                "sections_analysis": ai_result.get("sections_analysis", {}),
-                "specific_improvements": ai_result.get("specific_improvements", []),
-                "ats_recommendations": ai_result.get("ats_recommendations", [])
+            "analysis": analysis,
+            "improved_resume": improved_resume,
+            "document_id": saved_document.get("document_id"),
+            "saved_resume": {
+                "document_id": saved_document.get("document_id"),
+                "title": saved_document.get("title"),
+                "template": saved_document.get("template"),
+                "created_at": saved_document.get("created_at"),
+                "updated_at": saved_document.get("updated_at"),
             },
-            "improved_resume": ai_result.get(
-                "improved_resume",
-                "No improved resume generated."
-            ),
+            "analysis_id": saved_analysis.get("analysis_id"),
+            "usage": updated_usage_status,
             "original_length": len(text_content),
             "target_role": target_role,
             "debug_info": {
