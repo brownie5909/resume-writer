@@ -6,6 +6,7 @@ const ALLOWED_RESUME_TEMPLATES = ["default", "conservative", "creative", "execut
 let currentEditingDocumentId = null;
 let editOriginalSnapshot = "";
 let editHasUnsavedChanges = false;
+let currentVersionHistoryDocumentId = null;
 
 function getToken() {
   return localStorage.getItem("hire_ready_token");
@@ -201,6 +202,7 @@ async function loadMyResumes() {
         <div class="resume-actions">
           <button class="resume-btn" onclick="viewResume('${resume.document_id}', this)">View</button>
           <button class="resume-btn" onclick="editResume('${resume.document_id}', this)">Edit</button>
+          <button class="resume-btn" onclick="openVersionHistory('${resume.document_id}', this)">Version History</button>
           <button class="resume-btn" onclick="downloadResume('${resume.document_id}', this)">Download PDF</button>
           <button class="resume-btn" onclick="duplicateResume('${resume.document_id}', this)">Duplicate</button>
           <button class="resume-btn resume-btn-danger" onclick="deleteResume('${resume.document_id}', this)">Delete</button>
@@ -391,6 +393,164 @@ async function saveEditedResume(button) {
   }
 }
 
+async function openVersionHistory(documentId, button) {
+  currentVersionHistoryDocumentId = documentId;
+  const modal = document.getElementById("resume-version-modal");
+  const list = document.getElementById("version-history-list");
+  const preview = document.getElementById("version-preview");
+  const status = document.getElementById("version-modal-status");
+
+  setButtonLoading(button, true, "Loading...");
+
+  if (list) list.innerHTML = "Loading version history...";
+  if (preview) preview.innerHTML = "Select a version to preview it.";
+  if (status) {
+    status.innerHTML = "";
+    status.className = "edit-modal-status";
+  }
+
+  try {
+    const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}/versions`);
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      alert("Could not load version history.");
+      return;
+    }
+
+    if (modal) {
+      modal.classList.add("active");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.classList.add("resume-modal-open");
+    }
+
+    const versions = result.versions || [];
+    const versionLimit = result.version_limit;
+
+    if (status && versionLimit === 1) {
+      status.className = "edit-modal-status";
+      status.innerHTML = "Basic includes 1 backup version. Upgrade to Premium for full version history.";
+    }
+
+    if (!versions.length) {
+      list.innerHTML = `
+        <div class="version-empty">
+          No previous versions yet. A backup version is created when this resume is edited or replaced.
+        </div>
+      `;
+      return;
+    }
+
+    list.innerHTML = versions.map(version => `
+      <div class="version-history-item">
+        <div>
+          <strong>${escapeHtml(version.title || "Previous version")}</strong>
+          <p>Saved ${escapeHtml(formatDate(version.created_at))}</p>
+          <p>Template: ${escapeHtml(version.template || "default")}</p>
+        </div>
+        <div class="version-history-actions">
+          <button class="resume-btn resume-btn-secondary" onclick="previewResumeVersion('${documentId}', '${version.version_id}', this)">Preview</button>
+          <button class="resume-btn" onclick="restoreResumeVersion('${documentId}', '${version.version_id}', this)">Restore</button>
+        </div>
+      </div>
+    `).join("");
+
+  } catch (error) {
+    console.error("Version history error:", error);
+    alert("Something went wrong loading version history.");
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+function closeVersionHistoryModal() {
+  const modal = document.getElementById("resume-version-modal");
+  if (modal) {
+    modal.classList.remove("active");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("resume-modal-open");
+  }
+  currentVersionHistoryDocumentId = null;
+}
+
+async function previewResumeVersion(documentId, versionId, button) {
+  const preview = document.getElementById("version-preview");
+  setButtonLoading(button, true, "Opening...");
+
+  try {
+    const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}/versions/${versionId}`);
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      alert("Could not preview this version.");
+      return;
+    }
+
+    const version = result.version;
+    preview.innerHTML = `
+      <h3>${escapeHtml(version.title || "Previous version")}</h3>
+      <p><strong>Saved:</strong> ${escapeHtml(formatDate(version.created_at))}</p>
+      <p><strong>Template:</strong> ${escapeHtml(version.template || "default")}</p>
+      <h4>Resume Text</h4>
+      <pre>${escapeHtml(version.resume_text || "")}</pre>
+      ${version.cover_letter_text ? `<h4>Cover Letter</h4><pre>${escapeHtml(version.cover_letter_text)}</pre>` : ""}
+    `;
+
+  } catch (error) {
+    console.error("Preview version error:", error);
+    alert("Something went wrong previewing this version.");
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+async function restoreResumeVersion(documentId, versionId, button) {
+  const confirmed = confirm("Restore this previous version? Your current resume will be saved as a backup before restoring.");
+  if (!confirmed) return;
+
+  const status = document.getElementById("version-modal-status");
+  setButtonLoading(button, true, "Restoring...");
+
+  if (status) {
+    status.className = "edit-modal-status";
+    status.innerHTML = "Restoring version...";
+  }
+
+  try {
+    const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}/versions/${versionId}/restore`, {
+      method: "POST"
+    });
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      console.error("Restore version error:", result);
+      if (status) {
+        status.className = "edit-modal-status error";
+        status.innerHTML = result.detail || result.error || "Could not restore this version.";
+      }
+      return;
+    }
+
+    if (status) {
+      status.className = "edit-modal-status success";
+      status.innerHTML = "Version restored successfully.";
+    }
+
+    showDashboardNotice("Resume version restored successfully.", "success");
+    closeVersionHistoryModal();
+    await loadMyResumes();
+
+  } catch (error) {
+    console.error("Restore version error:", error);
+    if (status) {
+      status.className = "edit-modal-status error";
+      status.innerHTML = "Error restoring version.";
+    }
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
 async function downloadResume(documentId, button) {
   setButtonLoading(button, true, "Preparing PDF...");
 
@@ -437,7 +597,7 @@ async function duplicateResume(documentId, button) {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      alert("Could not duplicate resume.");
+      alert(result.detail?.error || result.error || "Could not duplicate resume.");
       return;
     }
 
@@ -564,6 +724,29 @@ function initialiseHireReadyDashboard() {
           <div class="resume-edit-modal-actions">
             <button class="resume-btn" onclick="saveEditedResume(this)">Save Changes</button>
             <button class="resume-btn resume-btn-secondary" onclick="closeEditModal()">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="resume-version-modal" class="resume-edit-modal" aria-hidden="true">
+        <div class="resume-edit-modal-backdrop" onclick="closeVersionHistoryModal()"></div>
+        <div class="resume-edit-modal-panel" role="dialog" aria-modal="true" aria-label="Resume version history">
+          <div class="resume-edit-modal-header">
+            <h2>Version History</h2>
+            <button class="resume-modal-close" onclick="closeVersionHistoryModal()" aria-label="Close version history modal">×</button>
+          </div>
+
+          <p id="version-modal-status" class="edit-modal-status"></p>
+
+          <div class="version-history-layout">
+            <div>
+              <h3>Saved Versions</h3>
+              <div id="version-history-list" class="version-history-list">Loading version history...</div>
+            </div>
+            <div>
+              <h3>Preview</h3>
+              <div id="version-preview" class="version-preview">Select a version to preview it.</div>
+            </div>
           </div>
         </div>
       </div>
