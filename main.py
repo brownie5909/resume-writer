@@ -8,7 +8,11 @@ from io import BytesIO
 import uuid
 import re
 from routes.resume_documents import router as resume_documents_router
-from app.services.resume_document_service import create_resume_document
+from app.services.resume_document_service import (
+    create_resume_document,
+    list_resume_documents,
+    update_resume_document,
+)
 from datetime import datetime, timedelta
 from pydantic import BaseModel, EmailStr, validator
 
@@ -188,21 +192,6 @@ def check_pdf_download_limit(user_id: str) -> bool:
         return current_usage < limit
 
 
-def count_saved_resumes(user_id: str) -> int:
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT COUNT(*) AS resume_count
-            FROM resume_documents
-            WHERE user_id = ?
-            """,
-            (user_id,)
-        )
-        result = cursor.fetchone()
-        return int(result["resume_count"] if result else 0)
-
-
 def get_saved_resume_limit(current_user: dict) -> Optional[int]:
     if bool(current_user.get("is_admin")):
         return None
@@ -214,12 +203,30 @@ def get_saved_resume_limit(current_user: dict) -> Optional[int]:
     return 1
 
 
-def check_saved_resume_limit(current_user: dict) -> bool:
-    limit = get_saved_resume_limit(current_user)
-    if limit is None or limit < 0:
-        return True
+def get_version_limit(current_user: dict) -> Optional[int]:
+    if bool(current_user.get("is_admin")):
+        return None
 
-    return count_saved_resumes(current_user["user_id"]) < limit
+    user_tier = get_user_tier_enhanced(current_user["user_id"])
+    if user_tier.value in ("premium", "professional"):
+        return None
+
+    return 1
+
+
+def get_existing_resume_for_overwrite(current_user: Optional[dict]) -> Optional[dict]:
+    if not current_user:
+        return None
+
+    saved_resume_limit = get_saved_resume_limit(current_user)
+    if saved_resume_limit is None:
+        return None
+
+    saved_resumes = list_resume_documents(current_user["user_id"])
+    if len(saved_resumes) < saved_resume_limit:
+        return None
+
+    return saved_resumes[0] if saved_resumes else None
 
 
 async def build_resume_response(
@@ -230,23 +237,10 @@ async def build_resume_response(
 ):
     clean_pdf_store()
 
-    if not is_guest and current_user and not check_saved_resume_limit(current_user):
-        user_tier = get_user_tier_enhanced(current_user["user_id"])
-        return JSONResponse(
-            status_code=403,
-            content={
-                "success": False,
-                "error": "Saved resume limit reached for your current plan",
-                "upgrade_required": True,
-                "current_tier": "basic" if user_tier.value == "free" else user_tier.value,
-                "saved_resume_limit": get_saved_resume_limit(current_user),
-                "upgrade_url": "/pricing"
-            }
-        )
-
     data = resume_request.data
     template_choice = resume_request.template_choice
     generate_cover_letter = resume_request.generate_cover_letter
+    existing_resume = None if is_guest else get_existing_resume_for_overwrite(current_user)
 
     ai_result = await generate_resume_with_ai(
         data=data,
@@ -266,9 +260,10 @@ async def build_resume_response(
         "template_used": template_choice,
         "requires_login_for_pdf": is_guest,
         "pdf_url": None,
+        "save_action": "guest" if is_guest else ("updated_existing" if existing_resume else "created_new"),
         "user_info": {
             "tier": "guest" if is_guest else "authenticated",
-            "message": "AI resume generated successfully. Log in to download a PDF." if is_guest else "AI resume generated successfully. PDF download is available for your account."
+            "message": "AI resume generated successfully. Log in to download a PDF." if is_guest else "AI resume generated successfully. Your saved resume has been updated." if existing_resume else "AI resume generated successfully. PDF download is available for your account."
         }
     }
 
@@ -284,14 +279,26 @@ async def build_resume_response(
     safe_name = data.full_name.replace(" ", "_")
     pdf_filename = f"resume_{safe_name}_{template_choice}.pdf"
 
-    saved_document = create_resume_document(
-        user_id=owner_id,
-        title=f"{data.full_name} - {data.job_title}",
-        resume_text=resume_text,
-        cover_letter_text=cover_letter,
-        template=template_choice,
-        pdf_filename=pdf_filename
-    )
+    if existing_resume:
+        saved_document = update_resume_document(
+            user_id=owner_id,
+            document_id=existing_resume["document_id"],
+            title=f"{data.full_name} - {data.job_title}",
+            resume_text=resume_text,
+            cover_letter_text=cover_letter,
+            template=template_choice,
+            pdf_filename=pdf_filename,
+            max_versions=get_version_limit(current_user),
+        )
+    else:
+        saved_document = create_resume_document(
+            user_id=owner_id,
+            title=f"{data.full_name} - {data.job_title}",
+            resume_text=resume_text,
+            cover_letter_text=cover_letter,
+            template=template_choice,
+            pdf_filename=pdf_filename
+        )
 
     pdf_store[pdf_id] = {
         "data": pdf_bytes,
