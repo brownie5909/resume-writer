@@ -98,6 +98,7 @@ def update_resume_document(
     existing = get_resume_document(user_id=user_id, document_id=document_id)
     if not existing:
         return None
+    create_resume_version(existing)
 
     new_title = title if title is not None else existing["title"]
     new_resume_text = resume_text if resume_text is not None else existing["resume_text"]
@@ -162,3 +163,5 @@ def delete_resume_document(user_id: str, document_id: str) -> bool:
         )
         conn.commit()
         return cursor.rowcount > 0
+        
+def create_resume_version(existing_resume):
