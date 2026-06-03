@@ -1,7 +1,11 @@
 console.log("Hire Ready dashboard.js loaded");
 
 const API_BASE = "https://resume-writer.onrender.com";
+const ALLOWED_RESUME_TEMPLATES = ["default", "conservative", "creative", "executive"];
+
 let currentEditingDocumentId = null;
+let editOriginalSnapshot = "";
+let editHasUnsavedChanges = false;
 
 function getToken() {
   return localStorage.getItem("hire_ready_token");
@@ -43,6 +47,47 @@ function formatDate(value) {
   } catch (error) {
     return value;
   }
+}
+
+function showDashboardNotice(message, type = "success") {
+  const notice = document.getElementById("dashboard-notice");
+  if (!notice) return;
+
+  notice.className = `dashboard-notice ${type}`;
+  notice.innerHTML = escapeHtml(message);
+
+  window.setTimeout(() => {
+    notice.innerHTML = "";
+    notice.className = "dashboard-notice";
+  }, 4500);
+}
+
+function getEditFormValues() {
+  const selectedTemplate = document.getElementById("edit-template")?.value || "default";
+
+  return {
+    title: document.getElementById("edit-title")?.value.trim() || "",
+    template: ALLOWED_RESUME_TEMPLATES.includes(selectedTemplate) ? selectedTemplate : "default",
+    resume_text: document.getElementById("edit-resume-text")?.value || "",
+    cover_letter_text: document.getElementById("edit-cover-letter-text")?.value || ""
+  };
+}
+
+function serializeEditValues(values) {
+  return JSON.stringify(values || getEditFormValues());
+}
+
+function updateEditDirtyState() {
+  editHasUnsavedChanges = currentEditingDocumentId !== null && serializeEditValues() !== editOriginalSnapshot;
+}
+
+function startEditChangeTracking() {
+  ["edit-title", "edit-template", "edit-resume-text", "edit-cover-letter-text"].forEach((fieldId) => {
+    const field = document.getElementById(fieldId);
+    if (!field) return;
+    field.oninput = updateEditDirtyState;
+    field.onchange = updateEditDirtyState;
+  });
 }
 
 async function hireReadyFetch(url, options = {}) {
@@ -238,13 +283,20 @@ async function editResume(documentId, button) {
     const resume = result.resume;
     currentEditingDocumentId = documentId;
 
+    const safeTemplate = ALLOWED_RESUME_TEMPLATES.includes(resume.template) ? resume.template : "default";
+
     document.getElementById("edit-title").value = resume.title || "";
-    document.getElementById("edit-template").value = resume.template || "default";
+    document.getElementById("edit-template").value = safeTemplate;
     document.getElementById("edit-resume-text").value = resume.resume_text || "";
     document.getElementById("edit-cover-letter-text").value = resume.cover_letter_text || "";
     document.getElementById("edit-modal-status").innerHTML = "";
+    document.getElementById("edit-modal-status").className = "edit-modal-status";
+
+    editOriginalSnapshot = serializeEditValues();
+    editHasUnsavedChanges = false;
 
     openEditModal();
+    startEditChangeTracking();
 
   } catch (error) {
     console.error("Edit resume error:", error);
@@ -258,17 +310,29 @@ function openEditModal() {
   const modal = document.getElementById("resume-edit-modal");
   if (modal) {
     modal.classList.add("active");
+    modal.setAttribute("aria-hidden", "false");
     document.body.classList.add("resume-modal-open");
   }
 }
 
-function closeEditModal() {
+function closeEditModal(forceClose = false) {
+  updateEditDirtyState();
+
+  if (!forceClose && editHasUnsavedChanges) {
+    const confirmed = confirm("You have unsaved changes. Close without saving?");
+    if (!confirmed) return;
+  }
+
   const modal = document.getElementById("resume-edit-modal");
   if (modal) {
     modal.classList.remove("active");
+    modal.setAttribute("aria-hidden", "true");
     document.body.classList.remove("resume-modal-open");
   }
+
   currentEditingDocumentId = null;
+  editOriginalSnapshot = "";
+  editHasUnsavedChanges = false;
 }
 
 async function saveEditedResume(button) {
@@ -278,17 +342,16 @@ async function saveEditedResume(button) {
   }
 
   const status = document.getElementById("edit-modal-status");
-  const title = document.getElementById("edit-title").value.trim();
-  const template = document.getElementById("edit-template").value.trim() || "default";
-  const resumeText = document.getElementById("edit-resume-text").value;
-  const coverLetterText = document.getElementById("edit-cover-letter-text").value;
+  const editValues = getEditFormValues();
 
-  if (!title) {
+  if (!editValues.title) {
+    status.className = "edit-modal-status error";
     status.innerHTML = "Please enter a resume title.";
     return;
   }
 
   setButtonLoading(button, true, "Saving...");
+  status.className = "edit-modal-status";
   status.innerHTML = "Saving changes...";
 
   try {
@@ -297,28 +360,31 @@ async function saveEditedResume(button) {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        title: title,
-        template: template,
-        resume_text: resumeText,
-        cover_letter_text: coverLetterText
-      })
+      body: JSON.stringify(editValues)
     });
 
     const result = await response.json();
 
     if (!response.ok || !result.success) {
       console.error("Save resume error:", result);
-      status.innerHTML = "Could not save resume changes.";
+      status.className = "edit-modal-status error";
+      status.innerHTML = result.detail || result.error || "Could not save resume changes.";
       return;
     }
 
+    editOriginalSnapshot = serializeEditValues(editValues);
+    editHasUnsavedChanges = false;
+
+    status.className = "edit-modal-status success";
     status.innerHTML = "Saved successfully.";
-    closeEditModal();
+    showDashboardNotice("Resume saved successfully.", "success");
+
+    closeEditModal(true);
     await loadMyResumes();
 
   } catch (error) {
     console.error("Save edited resume error:", error);
+    status.className = "edit-modal-status error";
     status.innerHTML = "Error saving resume changes.";
   } finally {
     setButtonLoading(button, false);
@@ -375,6 +441,7 @@ async function duplicateResume(documentId, button) {
       return;
     }
 
+    showDashboardNotice("Resume duplicated successfully.", "success");
     await loadMyResumes();
 
   } catch (error) {
@@ -404,6 +471,7 @@ async function deleteResume(documentId, button) {
       return;
     }
 
+    showDashboardNotice("Resume deleted successfully.", "success");
     await loadMyResumes();
 
   } catch (error) {
@@ -447,6 +515,8 @@ function initialiseHireReadyDashboard() {
         <p id="dashboard-tier">Loading account...</p>
       </div>
 
+      <div id="dashboard-notice" class="dashboard-notice"></div>
+
       <div class="dashboard-stats">
         <div class="stat-card">
           <div class="stat-number" id="resume-count">0</div>
@@ -481,6 +551,7 @@ function initialiseHireReadyDashboard() {
             <option value="creative">Creative</option>
             <option value="executive">Executive</option>
           </select>
+          <p class="resume-edit-help">Changing the template affects the next PDF you download from this saved resume.</p>
 
           <label class="resume-edit-label" for="edit-resume-text">Resume Text</label>
           <textarea id="edit-resume-text" class="resume-edit-textarea" rows="16"></textarea>
@@ -502,5 +573,14 @@ function initialiseHireReadyDashboard() {
   loadDashboardUser();
   loadMyResumes();
 }
+
+window.addEventListener("beforeunload", function (event) {
+  updateEditDirtyState();
+
+  if (!editHasUnsavedChanges) return;
+
+  event.preventDefault();
+  event.returnValue = "";
+});
 
 document.addEventListener("DOMContentLoaded", initialiseHireReadyDashboard);
