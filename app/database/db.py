@@ -76,12 +76,27 @@ def init_database():
         
         conn.commit()
 
-@contextmanager
-def get_db():
-    """Database connection context manager"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
+    @contextmanager
+    def get_db():
+        """Database connection context manager"""
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
+    CREATE TABLE IF NOT EXISTS resume_versions (
+        version_id TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+    
+        title TEXT,
+        resume_text TEXT,
+        cover_letter_text TEXT,
+        template TEXT,
+    
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+        FOREIGN KEY(document_id) REFERENCES resume_documents(document_id),
+        FOREIGN KEY(user_id) REFERENCES users(user_id)
+    )
