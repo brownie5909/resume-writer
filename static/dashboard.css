@@ -213,26 +213,6 @@ body.resume-modal-open {
   margin-top: 16px;
 }
 
-@media (max-width: 700px) {
-  .dashboard-stats,
-  .resume-edit-modal-actions {
-    display: block;
-  }
-
-  .resume-btn {
-    width: 100%;
-    margin-right: 0;
-    text-align: center;
-  }
-
-  .resume-edit-modal-panel {
-    width: calc(100vw - 20px);
-    max-height: calc(100vh - 20px);
-    margin: 10px auto;
-    padding: 18px;
-    border-radius: 12px;
-  }
-}
 .dashboard-notice {
   margin-bottom: 20px;
   padding: 12px 16px;
@@ -264,4 +244,126 @@ body.resume-modal-open {
   font-size: 13px;
   color: #667085;
   margin-top: 6px;
+}
+
+.version-history-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.version-history-list,
+.version-preview {
+  border: 1px solid #e4e7ec;
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 14px;
+  min-height: 220px;
+}
+
+.version-history-item {
+  background: #ffffff;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.version-history-item strong {
+  display: block;
+  color: #101828;
+  margin-bottom: 6px;
+}
+
+.version-history-item p {
+  margin: 4px 0;
+  color: #667085;
+  font-size: 14px;
+}
+
+.version-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.version-preview {
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.version-preview h3 {
+  margin-top: 0;
+}
+
+.version-preview pre {
+  white-space: pre-wrap;
+  font-family: Arial, sans-serif;
+  line-height: 1.5;
+  background: #ffffff;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.version-empty {
+  background: #ffffff;
+  border: 1px dashed #d0d5dd;
+  border-radius: 10px;
+  padding: 16px;
+  color: #667085;
+}
+
+#version-modal-status:not(:empty) {
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  color: #93370d;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+#version-modal-status.success {
+  background: #ecfdf3;
+  color: #027a48;
+  border-color: #abefc6;
+}
+
+#version-modal-status.error {
+  background: #fef3f2;
+  color: #b42318;
+  border-color: #fecdca;
+}
+
+@media (max-width: 700px) {
+  .dashboard-stats,
+  .resume-edit-modal-actions,
+  .version-history-actions {
+    display: block;
+  }
+
+  .resume-btn {
+    width: 100%;
+    margin-right: 0;
+    text-align: center;
+  }
+
+  .resume-edit-modal-panel {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+    margin: 10px auto;
+    padding: 18px;
+    border-radius: 12px;
+  }
+
+  .version-history-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .version-preview {
+    max-height: 420px;
+  }
 }
