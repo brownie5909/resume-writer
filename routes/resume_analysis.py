@@ -8,6 +8,7 @@ from app.services.resume_analysis_service import (
     create_or_update_analysis_resume_document,
     get_latest_resume_analysis_for_document,
     increment_resume_analysis_usage,
+    list_resume_analysis_results,
     prune_basic_analysis_results,
     save_resume_analysis_result,
 )
@@ -72,6 +73,18 @@ async def can_run_analysis(current_user: dict = Depends(get_current_user)):
         "success": True,
         **usage_status,
     }
+
+
+@router.get("/resume-analysis/history")
+async def get_resume_analysis_history(current_user: dict = Depends(get_current_user)):
+    """Return the authenticated user's saved resume analysis history, newest first."""
+    analyses = list_resume_analysis_results(current_user["user_id"])
+
+    return JSONResponse(content=jsonable_encoder({
+        "success": True,
+        "analyses": analyses,
+        "count": len(analyses),
+    }))
 
 
 @router.get("/resume-analysis/document/{document_id}")
