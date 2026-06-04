@@ -33,6 +33,12 @@ from routes.user_management import (
 )
 from routes.admin import router as admin_router
 from routes.subscriptions import router as subscriptions_router
+from routes.cover_letter_optimiser import router as cover_letter_optimiser_router
+
+app.include_router(
+    cover_letter_optimiser_router,
+    prefix="/api"
+)
 
 
 app = FastAPI(
