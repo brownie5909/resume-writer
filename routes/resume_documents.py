@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 from io import BytesIO
+from datetime import datetime
 import uuid
 
 from routes.user_management import get_current_user, get_user_tier_enhanced, TIER_LIMITS, get_db
@@ -51,9 +52,58 @@ def get_saved_resume_limit_for_user(current_user: dict) -> Optional[int]:
     return 1
 
 
-def track_pdf_usage(user_id: str):
-    from datetime import datetime
+def get_resume_analysis_limit_for_user(current_user: dict) -> Optional[int]:
+    """Return monthly resume analysis limit for the user's access level."""
+    if bool(current_user.get("is_admin")):
+        return None
 
+    user_tier = get_user_tier_enhanced(current_user["user_id"])
+    if user_tier.value in ("premium", "professional"):
+        return None
+
+    return 1
+
+
+def get_month_key() -> str:
+    return datetime.now().strftime("%Y-%m")
+
+
+def get_usage_count(user_id: str, feature_name: str, month_year: str) -> int:
+    """Return a monthly usage counter from usage_tracking."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT usage_count FROM usage_tracking
+            WHERE user_id = ? AND feature_name = ? AND month_year = ?
+            """,
+            (user_id, feature_name, month_year),
+        )
+        result = cursor.fetchone()
+        return int(result["usage_count"] if result else 0)
+
+
+def count_user_rows(user_id: str, table_name: str) -> int:
+    """Count rows owned by a user in known safe tables only."""
+    allowed_tables = {
+        "resume_versions",
+        "resume_analysis_results",
+    }
+
+    if table_name not in allowed_tables:
+        return 0
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"SELECT COUNT(*) AS total FROM {table_name} WHERE user_id = ?",
+            (user_id,),
+        )
+        result = cursor.fetchone()
+        return int(result["total"] if result else 0)
+
+
+def track_pdf_usage(user_id: str):
     current_month = datetime.now().strftime("%Y-%m")
 
     with get_db() as conn:
@@ -89,8 +139,6 @@ def track_pdf_usage(user_id: str):
 
 
 def check_pdf_download_limit(user_id: str) -> bool:
-    from datetime import datetime
-
     user_tier = get_user_tier_enhanced(user_id)
     tier_limits = TIER_LIMITS[user_tier]
     limit = tier_limits["pdf_downloads_per_month"]
@@ -112,6 +160,63 @@ def check_pdf_download_limit(user_id: str) -> bool:
         result = cursor.fetchone()
         current_usage = result[0] if result else 0
         return current_usage < limit
+
+
+@router.get("/dashboard/usage")
+async def dashboard_usage(current_user: dict = Depends(get_current_user)):
+    """Return plan and usage summary for dashboard upsell cards."""
+    user_id = current_user["user_id"]
+    user_tier = get_user_tier_enhanced(user_id)
+    tier_name = "admin" if bool(current_user.get("is_admin")) else ("basic" if user_tier.value == "free" else user_tier.value)
+    month_key = get_month_key()
+
+    saved_resumes = list_resume_documents(user_id)
+    resume_limit = get_saved_resume_limit_for_user(current_user)
+    version_limit = get_version_limit_for_user(current_user)
+    analysis_limit = get_resume_analysis_limit_for_user(current_user)
+
+    version_count = count_user_rows(user_id, "resume_versions")
+    analysis_total_count = count_user_rows(user_id, "resume_analysis_results")
+    analysis_month_count = get_usage_count(user_id, "resume_analysis", month_key)
+    pdf_month_count = get_usage_count(user_id, "pdf_downloads", month_key)
+
+    return {
+        "success": True,
+        "tier": tier_name,
+        "month_year": month_key,
+        "usage": {
+            "resumes": {
+                "used": len(saved_resumes),
+                "limit": resume_limit,
+                "unlimited": resume_limit is None,
+            },
+            "resume_versions": {
+                "used": version_count,
+                "limit": version_limit,
+                "unlimited": version_limit is None,
+            },
+            "resume_analysis_monthly": {
+                "used": analysis_month_count,
+                "limit": analysis_limit,
+                "unlimited": analysis_limit is None,
+            },
+            "resume_analysis_total": {
+                "used": analysis_total_count,
+                "limit": None,
+                "unlimited": True,
+            },
+            "pdf_downloads_monthly": {
+                "used": pdf_month_count,
+                "limit": TIER_LIMITS[user_tier]["pdf_downloads_per_month"],
+                "unlimited": TIER_LIMITS[user_tier]["pdf_downloads_per_month"] == -1,
+            },
+        },
+        "upgrade": {
+            "show": tier_name == "basic",
+            "url": "/pricing",
+            "message": "Upgrade to Premium for unlimited resumes, unlimited ATS analyses and full version history.",
+        },
+    }
 
 
 @router.get("/resumes")
