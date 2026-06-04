@@ -18,6 +18,22 @@ def row_to_dict(row) -> Optional[Dict]:
     return dict(row) if row else None
 
 
+def hydrate_analysis_json(result: Optional[Dict]) -> Optional[Dict]:
+    """Attach parsed analysis JSON to a database result."""
+    if not result:
+        return None
+
+    if result.get("analysis_json"):
+        try:
+            result["analysis"] = json.loads(result["analysis_json"])
+        except json.JSONDecodeError:
+            result["analysis"] = {}
+    else:
+        result["analysis"] = {}
+
+    return result
+
+
 def get_resume_analysis_monthly_limit(current_user: dict) -> Optional[int]:
     """Return monthly resume analysis limit for the user's current access level."""
     if bool(current_user.get("is_admin")):
@@ -265,13 +281,25 @@ def get_resume_analysis_result(user_id: str, analysis_id: str) -> Optional[Dict]
         )
         result = row_to_dict(cursor.fetchone())
 
-    if result and result.get("analysis_json"):
-        try:
-            result["analysis"] = json.loads(result["analysis_json"])
-        except json.JSONDecodeError:
-            result["analysis"] = {}
+    return hydrate_analysis_json(result)
 
-    return result
+
+def get_latest_resume_analysis_for_document(user_id: str, document_id: str) -> Optional[Dict]:
+    """Return the latest analysis result linked to a saved resume document."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM resume_analysis_results
+            WHERE user_id = ? AND document_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (user_id, document_id),
+        )
+        result = row_to_dict(cursor.fetchone())
+
+    return hydrate_analysis_json(result)
 
 
 def list_resume_analysis_results(user_id: str) -> List[Dict]:
