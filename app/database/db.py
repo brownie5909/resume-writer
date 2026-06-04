@@ -190,6 +190,28 @@ def init_database():
         _execute_schema(
             cursor,
             """
+            CREATE TABLE IF NOT EXISTS cover_letter_optimiser_results (
+                optimisation_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                title TEXT,
+                original_text TEXT NOT NULL,
+                target_role TEXT,
+                company_name TEXT,
+                job_posting TEXT,
+                analysis_json TEXT,
+                overall_score INTEGER,
+                ats_score INTEGER,
+                improved_cover_letter TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+            """
+        )
+
+        _execute_schema(
+            cursor,
+            """
             CREATE TABLE IF NOT EXISTS user_sessions (
                 session_id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
