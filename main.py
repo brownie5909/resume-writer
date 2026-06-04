@@ -22,6 +22,7 @@ from app.services.resume_generator import generate_resume_with_ai
 from routes.account_recovery import router as account_recovery_router
 from routes.admin import router as admin_router
 from routes.cover_letter import router as cover_letter_router
+from routes.cover_letter_generator import router as cover_letter_generator_router
 from routes.cover_letter_optimiser import router as cover_letter_optimiser_router
 from routes.interview import router as interview_router
 from routes.resume_analysis import router as resume_analysis_router
@@ -109,6 +110,7 @@ app.include_router(interview_router, prefix="/api", tags=["Interview"])
 app.include_router(resume_analysis_router, prefix="/api", tags=["Resume Analysis"])
 app.include_router(cover_letter_router, prefix="/api", tags=["Cover Letter"])
 app.include_router(cover_letter_optimiser_router, prefix="/api", tags=["Cover Letter Optimiser"])
+app.include_router(cover_letter_generator_router, prefix="/api", tags=["Cover Letter Generator"])
 app.include_router(resume_documents_router, prefix="/api", tags=["Resume Documents"])
 
 
