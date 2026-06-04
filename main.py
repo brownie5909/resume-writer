@@ -1,54 +1,47 @@
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi.responses import JSONResponse, StreamingResponse
-from fastapi.encoders import jsonable_encoder
-from fastapi.staticfiles import StaticFiles
-from app.core.middleware import setup_middleware
-from typing import Optional
+from datetime import datetime, timedelta
 from io import BytesIO
-import uuid
+from typing import Optional
 import re
-from routes.resume_documents import router as resume_documents_router
+import uuid
+
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, EmailStr, validator
+
+from app.core.middleware import setup_middleware
+from app.services.admin_setup import auto_create_admin_from_env
+from app.services.pdf_service import generate_resume_pdf
 from app.services.resume_document_service import (
     create_resume_document,
     list_resume_documents,
     update_resume_document,
 )
-from datetime import datetime, timedelta
-from pydantic import BaseModel, EmailStr, validator
-
 from app.services.resume_generator import generate_resume_with_ai
-from app.services.pdf_service import generate_resume_pdf
-from app.services.admin_setup import auto_create_admin_from_env
-
+from routes.account_recovery import router as account_recovery_router
+from routes.admin import router as admin_router
+from routes.cover_letter import router as cover_letter_router
+from routes.cover_letter_optimiser import router as cover_letter_optimiser_router
 from routes.interview import router as interview_router
 from routes.resume_analysis import router as resume_analysis_router
-from routes.cover_letter import router as cover_letter_router
-from routes.account_recovery import router as account_recovery_router
-from routes.user_management import (
-    router as user_management_router,
-    get_current_user,
-    get_user_tier_enhanced,
-    TIER_LIMITS,
-    get_db
-)
-from routes.admin import router as admin_router
+from routes.resume_documents import router as resume_documents_router
 from routes.subscriptions import router as subscriptions_router
-from routes.cover_letter_optimiser import router as cover_letter_optimiser_router
-
-app.include_router(
-    cover_letter_optimiser_router,
-    prefix="/api"
+from routes.user_management import (
+    TIER_LIMITS,
+    get_current_user,
+    get_db,
+    get_user_tier_enhanced,
+    router as user_management_router,
 )
-
 
 app = FastAPI(
     title="Hire Ready API",
     description="AI-powered job application tools with user, subscription, resume and PDF management",
-    version="2.2.4"
+    version="2.2.4",
 )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 setup_middleware(app)
 
 try:
@@ -115,11 +108,8 @@ app.include_router(subscriptions_router, prefix="/api", tags=["Subscription Mana
 app.include_router(interview_router, prefix="/api", tags=["Interview"])
 app.include_router(resume_analysis_router, prefix="/api", tags=["Resume Analysis"])
 app.include_router(cover_letter_router, prefix="/api", tags=["Cover Letter"])
-app.include_router(
-    resume_documents_router,
-    prefix="/api",
-    tags=["Resume Documents"]
-)
+app.include_router(cover_letter_optimiser_router, prefix="/api", tags=["Cover Letter Optimiser"])
+app.include_router(resume_documents_router, prefix="/api", tags=["Resume Documents"])
 
 
 pdf_store = {}
@@ -149,7 +139,7 @@ def track_pdf_usage(user_id: str):
             SELECT usage_count FROM usage_tracking
             WHERE user_id = ? AND feature_name = 'pdf_downloads' AND month_year = ?
             """,
-            (user_id, current_month)
+            (user_id, current_month),
         )
         result = cursor.fetchone()
 
@@ -160,7 +150,7 @@ def track_pdf_usage(user_id: str):
                 SET usage_count = ?, last_reset = CURRENT_TIMESTAMP
                 WHERE user_id = ? AND feature_name = 'pdf_downloads' AND month_year = ?
                 """,
-                (result[0] + 1, user_id, current_month)
+                (result[0] + 1, user_id, current_month),
             )
         else:
             cursor.execute(
@@ -168,7 +158,7 @@ def track_pdf_usage(user_id: str):
                 INSERT INTO usage_tracking (usage_id, user_id, feature_name, usage_count, month_year)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (str(uuid.uuid4()), user_id, "pdf_downloads", 1, current_month)
+                (str(uuid.uuid4()), user_id, "pdf_downloads", 1, current_month),
             )
 
         conn.commit()
@@ -191,7 +181,7 @@ def check_pdf_download_limit(user_id: str) -> bool:
             SELECT usage_count FROM usage_tracking
             WHERE user_id = ? AND feature_name = 'pdf_downloads' AND month_year = ?
             """,
-            (user_id, current_month)
+            (user_id, current_month),
         )
         result = cursor.fetchone()
         current_usage = result[0] if result else 0
@@ -239,7 +229,7 @@ async def build_resume_response(
     resume_request: ResumeRequest,
     owner_id: Optional[str] = None,
     is_guest: bool = False,
-    current_user: Optional[dict] = None
+    current_user: Optional[dict] = None,
 ):
     clean_pdf_store()
 
@@ -251,7 +241,7 @@ async def build_resume_response(
     ai_result = await generate_resume_with_ai(
         data=data,
         template_choice=template_choice,
-        generate_cover_letter=generate_cover_letter
+        generate_cover_letter=generate_cover_letter,
     )
 
     resume_text = ai_result.get("resume_text", "")
@@ -269,8 +259,14 @@ async def build_resume_response(
         "save_action": "guest" if is_guest else ("updated_existing" if existing_resume else "created_new"),
         "user_info": {
             "tier": "guest" if is_guest else "authenticated",
-            "message": "AI resume generated successfully. Log in to download a PDF." if is_guest else "AI resume generated successfully. Your saved resume has been updated." if existing_resume else "AI resume generated successfully. PDF download is available for your account."
-        }
+            "message": (
+                "AI resume generated successfully. Log in to download a PDF."
+                if is_guest
+                else "AI resume generated successfully. Your saved resume has been updated."
+                if existing_resume
+                else "AI resume generated successfully. PDF download is available for your account."
+            ),
+        },
     }
 
     if is_guest:
@@ -278,7 +274,7 @@ async def build_resume_response(
 
     pdf_bytes = generate_resume_pdf(
         resume_text=resume_text,
-        cover_letter=cover_letter
+        cover_letter=cover_letter,
     )
 
     pdf_id = str(uuid.uuid4())
@@ -303,7 +299,7 @@ async def build_resume_response(
             resume_text=resume_text,
             cover_letter_text=cover_letter,
             template=template_choice,
-            pdf_filename=pdf_filename
+            pdf_filename=pdf_filename,
         )
 
     pdf_store[pdf_id] = {
@@ -313,7 +309,7 @@ async def build_resume_response(
         "user_id": owner_id,
         "document_id": saved_document.get("document_id"),
         "is_guest": False,
-        "downloaded": False
+        "downloaded": False,
     }
 
     response_payload["pdf_url"] = f"/api/download-resume/{pdf_id}"
@@ -325,7 +321,7 @@ async def build_resume_response(
         "template": saved_document.get("template"),
         "pdf_filename": saved_document.get("pdf_filename"),
         "created_at": saved_document.get("created_at"),
-        "updated_at": saved_document.get("updated_at")
+        "updated_at": saved_document.get("updated_at"),
     }
 
     return JSONResponse(content=jsonable_encoder(response_payload))
@@ -337,13 +333,13 @@ async def generate_resume_guest(resume_request: ResumeRequest):
         return await build_resume_response(
             resume_request=resume_request,
             owner_id=None,
-            is_guest=True
+            is_guest=True,
         )
     except Exception as error:
         print(f"❌ Guest resume generation error: {str(error)}")
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": f"Guest resume generation failed: {str(error)}"}
+            content={"success": False, "error": f"Guest resume generation failed: {str(error)}"},
         )
 
 
@@ -354,13 +350,13 @@ async def generate_resume(resume_request: ResumeRequest, current_user: dict = De
             resume_request=resume_request,
             owner_id=current_user["user_id"],
             is_guest=False,
-            current_user=current_user
+            current_user=current_user,
         )
     except Exception as error:
         print(f"❌ Resume generation error: {str(error)}")
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": f"Resume generation failed: {str(error)}"}
+            content={"success": False, "error": f"Resume generation failed: {str(error)}"},
         )
 
 
@@ -371,8 +367,8 @@ async def download_resume_guest(pdf_id: str):
         detail={
             "error": "PDF downloads require a logged-in account",
             "login_required": True,
-            "login_url": "/login"
-        }
+            "login_url": "/login",
+        },
     )
 
 
@@ -395,8 +391,8 @@ async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_
                     "error": "Monthly PDF download limit reached for your current plan",
                     "upgrade_required": True,
                     "current_tier": user_tier.value,
-                    "upgrade_url": "/pricing"
-                }
+                    "upgrade_url": "/pricing",
+                },
             )
 
         track_pdf_usage(current_user["user_id"])
@@ -405,7 +401,7 @@ async def download_resume(pdf_id: str, current_user: dict = Depends(get_current_
     return StreamingResponse(
         BytesIO(pdf_entry["data"]),
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={pdf_entry.get('filename', f'resume_{pdf_id}.pdf')}"}
+        headers={"Content-Disposition": f"attachment; filename={pdf_entry.get('filename', f'resume_{pdf_id}.pdf')}"},
     )
 
 
