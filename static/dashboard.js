@@ -239,6 +239,84 @@ async function loadMyResumes() {
   }
 }
 
+async function loadMyAnalyses() {
+  const token = getToken();
+  const status = document.getElementById("analysis-history-status");
+  const list = document.getElementById("analysis-history-list");
+  const countElement = document.getElementById("analysis-count");
+
+  if (!status || !list) {
+    console.warn("Dashboard container missing analysis-history-status or analysis-history-list element.");
+    return;
+  }
+
+  if (!token) {
+    status.innerHTML = "Please log in to view your saved analyses.";
+    list.innerHTML = "";
+    return;
+  }
+
+  status.innerHTML = "Loading your saved analyses...";
+
+  try {
+    const response = await hireReadyFetch(`${API_BASE}/api/resume-analysis/history`);
+    const result = await response.json();
+
+    console.log("My Analyses Response:", result);
+
+    if (!response.ok || !result.success) {
+      status.innerHTML = result.detail || result.error || "Could not load analyses.";
+      list.innerHTML = "";
+      return;
+    }
+
+    const analyses = result.analyses || [];
+
+    if (countElement) {
+      countElement.innerHTML = analyses.length;
+    }
+
+    if (!analyses.length) {
+      status.innerHTML = "You do not have any saved resume analyses yet.";
+      list.innerHTML = `
+        <div class="analysis-history-empty">
+          <p>Analyse a resume to start building your ATS improvement history.</p>
+          <a href="/premium-resume-analysis/" class="resume-btn">Analyse Resume</a>
+        </div>
+      `;
+      return;
+    }
+
+    status.innerHTML = "";
+    list.innerHTML = analyses.map(item => `
+      <div class="analysis-history-card">
+        <div class="analysis-history-main">
+          <h3>${escapeHtml(item.original_filename || "Resume Analysis")}</h3>
+          <p><strong>Target Role:</strong> ${escapeHtml(item.target_role || "Not specified")}</p>
+          <p><strong>Analysed:</strong> ${escapeHtml(formatDate(item.created_at))}</p>
+        </div>
+        <div class="analysis-history-scores">
+          <div>
+            <span>${escapeHtml(item.overall_score || 0)}</span>
+            <small>Overall</small>
+          </div>
+          <div>
+            <span>${escapeHtml(item.ats_score || 0)}</span>
+            <small>ATS</small>
+          </div>
+        </div>
+        <div class="analysis-history-actions">
+          <button class="resume-btn" onclick="viewResumeAnalysis('${item.document_id}', this)">View Analysis</button>
+        </div>
+      </div>
+    `).join("");
+
+  } catch (error) {
+    console.error("Load analyses error:", error);
+    status.innerHTML = "Error loading analyses. Please refresh the page.";
+  }
+}
+
 async function viewResume(documentId, button) {
   setButtonLoading(button, true, "Opening...");
 
@@ -406,6 +484,7 @@ async function saveEditedResume(button) {
 
     closeEditModal(true);
     await loadMyResumes();
+    await loadMyAnalyses();
 
   } catch (error) {
     console.error("Save edited resume error:", error);
@@ -676,6 +755,7 @@ async function restoreResumeVersion(documentId, versionId, button) {
     showDashboardNotice("Resume version restored successfully.", "success");
     closeVersionHistoryModal();
     await loadMyResumes();
+    await loadMyAnalyses();
 
   } catch (error) {
     console.error("Restore version error:", error);
@@ -740,6 +820,7 @@ async function duplicateResume(documentId, button) {
 
     showDashboardNotice("Resume duplicated successfully.", "success");
     await loadMyResumes();
+    await loadMyAnalyses();
 
   } catch (error) {
     console.error("Duplicate resume error:", error);
@@ -770,6 +851,7 @@ async function deleteResume(documentId, button) {
 
     showDashboardNotice("Resume deleted successfully.", "success");
     await loadMyResumes();
+    await loadMyAnalyses();
 
   } catch (error) {
     console.error("Delete resume error:", error);
@@ -819,6 +901,10 @@ function initialiseHireReadyDashboard() {
           <div class="stat-number" id="resume-count">0</div>
           <div class="stat-label">Resumes</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-number" id="analysis-count">0</div>
+          <div class="stat-label">Analyses</div>
+        </div>
       </div>
 
       <div class="dashboard-actions">
@@ -829,6 +915,10 @@ function initialiseHireReadyDashboard() {
       <h2>My Resumes</h2>
       <p id="resume-status">Loading your saved resumes...</p>
       <div id="resume-list"></div>
+
+      <h2 class="dashboard-section-heading">My Analyses</h2>
+      <p id="analysis-history-status">Loading your saved analyses...</p>
+      <div id="analysis-history-list" class="analysis-history-list"></div>
 
       <div id="resume-edit-modal" class="resume-edit-modal" aria-hidden="true">
         <div class="resume-edit-modal-backdrop" onclick="closeEditModal()"></div>
@@ -905,6 +995,7 @@ function initialiseHireReadyDashboard() {
 
   loadDashboardUser();
   loadMyResumes();
+  loadMyAnalyses();
 }
 
 window.addEventListener("beforeunload", function (event) {
