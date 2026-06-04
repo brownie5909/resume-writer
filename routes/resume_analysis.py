@@ -6,6 +6,7 @@ from app.services.openai_service import analyze_resume_with_ai
 from app.services.resume_analysis_service import (
     can_run_resume_analysis,
     create_or_update_analysis_resume_document,
+    get_latest_resume_analysis_for_document,
     increment_resume_analysis_usage,
     prune_basic_analysis_results,
     save_resume_analysis_result,
@@ -71,6 +72,36 @@ async def can_run_analysis(current_user: dict = Depends(get_current_user)):
         "success": True,
         **usage_status,
     }
+
+
+@router.get("/resume-analysis/document/{document_id}")
+async def get_resume_analysis_for_document(
+    document_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the latest saved analysis linked to one of the user's saved resumes."""
+    analysis_result = get_latest_resume_analysis_for_document(
+        user_id=current_user["user_id"],
+        document_id=document_id,
+    )
+
+    if not analysis_result:
+        raise HTTPException(status_code=404, detail="No analysis found for this resume")
+
+    return JSONResponse(content=jsonable_encoder({
+        "success": True,
+        "analysis_id": analysis_result.get("analysis_id"),
+        "document_id": analysis_result.get("document_id"),
+        "original_filename": analysis_result.get("original_filename"),
+        "target_role": analysis_result.get("target_role"),
+        "overall_score": analysis_result.get("overall_score"),
+        "ats_score": analysis_result.get("ats_score"),
+        "improved_resume": analysis_result.get("improved_resume"),
+        "original_resume_text": analysis_result.get("original_resume_text"),
+        "analysis": analysis_result.get("analysis", {}),
+        "created_at": analysis_result.get("created_at"),
+        "updated_at": analysis_result.get("updated_at"),
+    }))
 
 
 @router.post("/analyze-resume")
