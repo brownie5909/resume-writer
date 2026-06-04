@@ -26,6 +26,11 @@ class CoverLetterOptimiseRequest(BaseModel):
     job_posting: Optional[str] = None
 
 
+@router.get("/cover-letter-optimiser/health")
+async def cover_letter_optimiser_health():
+    return {"status": "healthy", "service": "cover-letter-optimiser"}
+
+
 @router.get("/cover-letter-optimiser/can-run")
 async def can_run_cover_letter_optimiser_route(current_user: dict = Depends(get_current_user)):
     """Return whether the authenticated user can run another cover letter optimisation this month."""
@@ -139,8 +144,3 @@ async def get_cover_letter_optimiser_result(
         "success": True,
         "result": result,
     }
-
-
-@router.get("/cover-letter-optimiser/health")
-async def cover_letter_optimiser_health():
-    return {"status": "healthy", "service": "cover-letter-optimiser"}
