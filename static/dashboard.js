@@ -63,6 +63,28 @@ function showDashboardNotice(message, type = "success") {
   }, 4500);
 }
 
+function renderDashboardList(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return "<p>No items returned.</p>";
+  }
+
+  return `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
+function renderDashboardObject(value) {
+  if (!value || typeof value !== "object") {
+    return "<p>No details returned.</p>";
+  }
+
+  return `
+    <ul>
+      ${Object.entries(value).map(([key, item]) => `
+        <li><strong>${escapeHtml(key.replaceAll("_", " "))}:</strong> ${escapeHtml(typeof item === "object" ? JSON.stringify(item) : item)}</li>
+      `).join("")}
+    </ul>
+  `;
+}
+
 function getEditFormValues() {
   const selectedTemplate = document.getElementById("edit-template")?.value || "default";
 
@@ -202,6 +224,7 @@ async function loadMyResumes() {
         <div class="resume-actions">
           <button class="resume-btn" onclick="viewResume('${resume.document_id}', this)">View</button>
           <button class="resume-btn" onclick="editResume('${resume.document_id}', this)">Edit</button>
+          <button class="resume-btn" onclick="viewResumeAnalysis('${resume.document_id}', this)">View Analysis</button>
           <button class="resume-btn" onclick="openVersionHistory('${resume.document_id}', this)">Version History</button>
           <button class="resume-btn" onclick="downloadResume('${resume.document_id}', this)">Download PDF</button>
           <button class="resume-btn" onclick="duplicateResume('${resume.document_id}', this)">Duplicate</button>
@@ -390,6 +413,120 @@ async function saveEditedResume(button) {
     status.innerHTML = "Error saving resume changes.";
   } finally {
     setButtonLoading(button, false);
+  }
+}
+
+async function viewResumeAnalysis(documentId, button) {
+  const modal = document.getElementById("resume-analysis-modal");
+  const body = document.getElementById("analysis-modal-body");
+  const status = document.getElementById("analysis-modal-status");
+
+  setButtonLoading(button, true, "Loading...");
+
+  if (body) body.innerHTML = "Loading analysis...";
+  if (status) {
+    status.innerHTML = "";
+    status.className = "edit-modal-status";
+  }
+
+  try {
+    const response = await hireReadyFetch(`${API_BASE}/api/resume-analysis/document/${documentId}`);
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      if (modal) {
+        modal.classList.add("active");
+        modal.setAttribute("aria-hidden", "false");
+        document.body.classList.add("resume-modal-open");
+      }
+      if (status) {
+        status.className = "edit-modal-status error";
+        status.innerHTML = result.detail || "No saved analysis found for this resume yet.";
+      }
+      if (body) {
+        body.innerHTML = `
+          <div class="analysis-empty">
+            <p>This resume does not have a saved ATS analysis yet.</p>
+            <a href="/premium-resume-analysis/" class="resume-btn">Analyse Resume</a>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    const analysis = result.analysis || {};
+
+    if (modal) {
+      modal.classList.add("active");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.classList.add("resume-modal-open");
+    }
+
+    if (body) {
+      body.innerHTML = `
+        <div class="analysis-modal-summary">
+          <div class="analysis-score-card-small">
+            <span>${escapeHtml(analysis.overall_score || result.overall_score || 0)}</span>
+            <small>Overall Score</small>
+          </div>
+          <div class="analysis-score-card-small">
+            <span>${escapeHtml(analysis.ats_score || result.ats_score || 0)}</span>
+            <small>ATS Score</small>
+          </div>
+          <div class="analysis-score-card-small">
+            <span>${escapeHtml(analysis.formatting_score || 0)}</span>
+            <small>Formatting</small>
+          </div>
+        </div>
+
+        <div class="analysis-meta-box">
+          <p><strong>Original file:</strong> ${escapeHtml(result.original_filename || "Not recorded")}</p>
+          <p><strong>Target role:</strong> ${escapeHtml(result.target_role || "Not specified")}</p>
+          <p><strong>Analysed:</strong> ${escapeHtml(formatDate(result.created_at))}</p>
+        </div>
+
+        <div class="analysis-modal-grid">
+          <div>
+            <h3>Strengths</h3>
+            ${renderDashboardList(analysis.strengths)}
+
+            <h3>Weaknesses</h3>
+            ${renderDashboardList(analysis.weaknesses)}
+
+            <h3>Specific Improvements</h3>
+            ${renderDashboardList(analysis.specific_improvements)}
+          </div>
+          <div>
+            <h3>ATS Recommendations</h3>
+            ${renderDashboardList(analysis.ats_recommendations)}
+
+            <h3>Keyword Analysis</h3>
+            ${renderDashboardObject(analysis.keyword_analysis)}
+
+            <h3>Section Analysis</h3>
+            ${renderDashboardObject(analysis.sections_analysis)}
+          </div>
+        </div>
+
+        <h3>Improved Resume</h3>
+        <pre class="analysis-modal-pre">${escapeHtml(result.improved_resume || "")}</pre>
+      `;
+    }
+
+  } catch (error) {
+    console.error("View analysis error:", error);
+    alert("Something went wrong loading this analysis.");
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+function closeAnalysisModal() {
+  const modal = document.getElementById("resume-analysis-modal");
+  if (modal) {
+    modal.classList.remove("active");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("resume-modal-open");
   }
 }
 
@@ -725,6 +862,19 @@ function initialiseHireReadyDashboard() {
             <button class="resume-btn" onclick="saveEditedResume(this)">Save Changes</button>
             <button class="resume-btn resume-btn-secondary" onclick="closeEditModal()">Cancel</button>
           </div>
+        </div>
+      </div>
+
+      <div id="resume-analysis-modal" class="resume-edit-modal" aria-hidden="true">
+        <div class="resume-edit-modal-backdrop" onclick="closeAnalysisModal()"></div>
+        <div class="resume-edit-modal-panel analysis-modal-panel" role="dialog" aria-modal="true" aria-label="Resume analysis">
+          <div class="resume-edit-modal-header">
+            <h2>Resume Analysis</h2>
+            <button class="resume-modal-close" onclick="closeAnalysisModal()" aria-label="Close analysis modal">×</button>
+          </div>
+
+          <p id="analysis-modal-status" class="edit-modal-status"></p>
+          <div id="analysis-modal-body" class="analysis-modal-body">Loading analysis...</div>
         </div>
       </div>
 
