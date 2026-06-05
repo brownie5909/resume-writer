@@ -193,6 +193,20 @@ def init_database():
             )
         """)
         _execute_schema(cursor, """
+            CREATE TABLE IF NOT EXISTS interview_preparation_results (
+                prep_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                title TEXT,
+                company_name TEXT,
+                role_title TEXT,
+                job_posting TEXT,
+                preparation_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+        """)
+        _execute_schema(cursor, """
             CREATE TABLE IF NOT EXISTS user_sessions (
                 session_id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
