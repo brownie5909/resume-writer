@@ -35,13 +35,18 @@ from routes.user_management import (
     get_user_tier_enhanced,
     router as user_management_router,
 )
+from routes.interview_preparation import router as interview_preparation_router
 
 app = FastAPI(
     title="Hire Ready API",
     description="AI-powered job application tools with user, subscription, resume and PDF management",
     version="2.2.4",
 )
-
+app.include_router(
+    interview_preparation_router,
+    prefix="/api",
+    tags=["Interview Preparation"]
+)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 setup_middleware(app)
 
