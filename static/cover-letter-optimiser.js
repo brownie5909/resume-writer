@@ -120,7 +120,6 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
     return `
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;padding-top:16px;border-top:1px solid #e4e7ec;">
         <a href="/dashboard/" class="clo-btn">Open Dashboard</a>
-        <a href="/my-cover-letters/" class="clo-btn">View My Cover Letters</a>
       </div>
     `;
   }
