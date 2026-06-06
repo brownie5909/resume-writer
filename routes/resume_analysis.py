@@ -12,6 +12,7 @@ from app.services.resume_analysis_service import (
     prune_basic_analysis_results,
     save_resume_analysis_result,
 )
+from app.services.resume_document_service import get_resume_document
 from routes.user_management import get_current_user
 import os
 from typing import Optional
@@ -63,6 +64,95 @@ def build_analysis_payload(ai_result: dict) -> dict:
         "specific_improvements": ai_result.get("specific_improvements", []),
         "ats_recommendations": ai_result.get("ats_recommendations", [])
     }
+
+
+async def analyse_resume_text_and_save(
+    current_user: dict,
+    text_content: str,
+    original_filename: str,
+    original_content_type: str = "text/plain",
+    target_role: Optional[str] = None,
+    source_document_id: Optional[str] = None,
+):
+    """Run resume analysis on supplied text and save the result."""
+    usage_status = can_run_resume_analysis(current_user)
+    if not usage_status["can_run"]:
+        return JSONResponse(
+            status_code=403,
+            content=jsonable_encoder({
+                "success": False,
+                "error": usage_status["message"],
+                **usage_status,
+            }),
+        )
+
+    if not text_content or len(text_content.strip()) < 50:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not find enough resume text to analyse. Please choose a fuller saved resume or upload a file."
+        )
+
+    ai_result = await analyze_resume_with_ai(
+        resume_text=text_content,
+        target_role=target_role
+    )
+
+    analysis = build_analysis_payload(ai_result)
+    improved_resume = ai_result.get("improved_resume", "No improved resume generated.")
+
+    if source_document_id:
+        saved_document = get_resume_document(
+            user_id=current_user["user_id"],
+            document_id=source_document_id,
+        )
+        if not saved_document:
+            raise HTTPException(status_code=404, detail="Saved resume not found")
+    else:
+        resume_title = f"Analysed Resume - {target_role}" if target_role else f"Analysed Resume - {original_filename}"
+        saved_document = create_or_update_analysis_resume_document(
+            current_user=current_user,
+            title=resume_title,
+            improved_resume=improved_resume,
+        )
+
+    saved_analysis = save_resume_analysis_result(
+        user_id=current_user["user_id"],
+        document_id=saved_document["document_id"],
+        original_filename=original_filename,
+        original_content_type=original_content_type or "",
+        original_resume_text=text_content,
+        target_role=target_role,
+        analysis=analysis,
+        improved_resume=improved_resume,
+    )
+
+    prune_basic_analysis_results(current_user=current_user, keep_latest=1)
+    increment_resume_analysis_usage(current_user["user_id"])
+    updated_usage_status = can_run_resume_analysis(current_user)
+
+    return JSONResponse(content=jsonable_encoder({
+        "success": True,
+        "analysis": analysis,
+        "improved_resume": improved_resume,
+        "document_id": saved_document.get("document_id"),
+        "saved_resume": {
+            "document_id": saved_document.get("document_id"),
+            "title": saved_document.get("title"),
+            "template": saved_document.get("template"),
+            "created_at": saved_document.get("created_at"),
+            "updated_at": saved_document.get("updated_at"),
+        },
+        "analysis_id": saved_analysis.get("analysis_id"),
+        "usage": updated_usage_status,
+        "original_length": len(text_content),
+        "target_role": target_role,
+        "debug_info": {
+            "file_type": original_content_type,
+            "filename": original_filename,
+            "characters_extracted": len(text_content),
+            "source_document_id": source_document_id,
+        }
+    }))
 
 
 @router.get("/resume-analysis/can-run")
@@ -117,6 +207,44 @@ async def get_resume_analysis_for_document(
     }))
 
 
+@router.post("/resume-analysis/analyze-saved/{document_id}")
+async def analyze_saved_resume(
+    document_id: str,
+    target_role: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Analyse a resume already saved in the user's account."""
+    try:
+        saved_resume = get_resume_document(
+            user_id=current_user["user_id"],
+            document_id=document_id,
+        )
+
+        if not saved_resume:
+            raise HTTPException(status_code=404, detail="Saved resume not found")
+
+        resume_text = saved_resume.get("resume_text") or ""
+        original_filename = saved_resume.get("title") or "Saved Resume"
+
+        return await analyse_resume_text_and_save(
+            current_user=current_user,
+            text_content=resume_text,
+            original_filename=original_filename,
+            original_content_type="saved/resume-document",
+            target_role=target_role,
+            source_document_id=document_id,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Saved resume analysis error: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": f"Saved resume analysis failed: {str(e)}"}
+        )
+
+
 @router.post("/analyze-resume")
 async def analyze_resume(
     file: UploadFile = File(...),
@@ -127,17 +255,6 @@ async def analyze_resume(
     try:
         print(f"🔬 Starting analysis for file: {file.filename}")
         print(f"🎯 Target role: {target_role}")
-
-        usage_status = can_run_resume_analysis(current_user)
-        if not usage_status["can_run"]:
-            return JSONResponse(
-                status_code=403,
-                content=jsonable_encoder({
-                    "success": False,
-                    "error": usage_status["message"],
-                    **usage_status,
-                }),
-            )
 
         validate_file(file)
 
@@ -167,61 +284,13 @@ async def analyze_resume(
 
         print(f"📄 Extracted resume text length: {len(text_content)}")
 
-        ai_result = await analyze_resume_with_ai(
-            resume_text=text_content,
-            target_role=target_role
-        )
-
-        analysis = build_analysis_payload(ai_result)
-        improved_resume = ai_result.get("improved_resume", "No improved resume generated.")
-        resume_title = f"Analysed Resume - {target_role}" if target_role else f"Analysed Resume - {file.filename}"
-
-        saved_document = create_or_update_analysis_resume_document(
+        return await analyse_resume_text_and_save(
             current_user=current_user,
-            title=resume_title,
-            improved_resume=improved_resume,
-        )
-
-        saved_analysis = save_resume_analysis_result(
-            user_id=current_user["user_id"],
-            document_id=saved_document["document_id"],
+            text_content=text_content,
             original_filename=file.filename,
             original_content_type=file.content_type or "",
-            original_resume_text=text_content,
             target_role=target_role,
-            analysis=analysis,
-            improved_resume=improved_resume,
         )
-
-        prune_basic_analysis_results(current_user=current_user, keep_latest=1)
-        increment_resume_analysis_usage(current_user["user_id"])
-
-        updated_usage_status = can_run_resume_analysis(current_user)
-
-        response_payload = {
-            "success": True,
-            "analysis": analysis,
-            "improved_resume": improved_resume,
-            "document_id": saved_document.get("document_id"),
-            "saved_resume": {
-                "document_id": saved_document.get("document_id"),
-                "title": saved_document.get("title"),
-                "template": saved_document.get("template"),
-                "created_at": saved_document.get("created_at"),
-                "updated_at": saved_document.get("updated_at"),
-            },
-            "analysis_id": saved_analysis.get("analysis_id"),
-            "usage": updated_usage_status,
-            "original_length": len(text_content),
-            "target_role": target_role,
-            "debug_info": {
-                "file_type": file.content_type,
-                "filename": file.filename,
-                "characters_extracted": len(text_content)
-            }
-        }
-
-        return JSONResponse(content=jsonable_encoder(response_payload))
 
     except HTTPException:
         raise
