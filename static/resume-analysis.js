@@ -216,10 +216,53 @@ async function checkAnalysisAvailability() {
   }
 }
 
+async function loadSavedResumesForAnalysis() {
+  const select = document.getElementById("analysis-saved-resume");
+  if (!select || !getHireReadyToken()) return;
+
+  try {
+    const response = await hireReadyAnalysisFetch(`${HIRE_READY_ANALYSIS_API_BASE}/api/resumes`);
+    const result = await response.json();
+
+    const resumes = Array.isArray(result)
+      ? result
+      : (result.resumes || result.documents || result.results || []);
+
+    if (!Array.isArray(resumes) || !resumes.length) {
+      return;
+    }
+
+    resumes.forEach(resume => {
+      const option = document.createElement("option");
+      option.value = resume.document_id;
+      option.textContent = resume.title || "Saved Resume";
+      select.appendChild(option);
+    });
+  } catch (error) {
+    console.warn("Could not load saved resumes for analysis", error);
+  }
+}
+
+function handleSavedResumeSelection() {
+  const select = document.getElementById("analysis-saved-resume");
+  const fileInput = document.getElementById("analysis-file");
+
+  if (!select || !fileInput) return;
+
+  if (select.value) {
+    fileInput.required = false;
+    fileInput.value = "";
+    showAnalysisNotice("Saved resume selected. Click Analyse Resume to review this saved resume.", "info");
+  } else {
+    fileInput.required = true;
+  }
+}
+
 async function analyzeResume(event) {
   event.preventDefault();
 
   const token = getHireReadyToken();
+  const savedResumeSelect = document.getElementById("analysis-saved-resume");
   const fileInput = document.getElementById("analysis-file");
   const targetRoleInput = document.getElementById("analysis-target-role");
   const button = document.getElementById("analysis-submit-btn");
@@ -230,30 +273,47 @@ async function analyzeResume(event) {
     return;
   }
 
-  if (!fileInput?.files?.length) {
-    showAnalysisNotice("Please choose a resume file before starting analysis.", "error");
+  const savedResumeId = savedResumeSelect?.value || "";
+  const hasUploadedFile = Boolean(fileInput?.files?.length);
+
+  if (!savedResumeId && !hasUploadedFile) {
+    showAnalysisNotice("Please choose a saved resume or upload a resume file before starting analysis.", "error");
     return;
   }
 
-  const formData = new FormData();
-  formData.append("file", fileInput.files[0]);
-
-  if (targetRoleInput?.value?.trim()) {
-    formData.append("target_role", targetRoleInput.value.trim());
-  }
-
   setAnalysisButtonLoading(button, true, "Analysing...");
-  showAnalysisNotice("Analysing your resume. Your improved version will be saved to your dashboard when complete.", "info");
+  showAnalysisNotice("Analysing your resume. Your results will be saved to your dashboard when complete.", "info");
 
   if (output) {
     output.innerHTML = "";
   }
 
   try {
-    const response = await hireReadyAnalysisFetch(`${HIRE_READY_ANALYSIS_API_BASE}/api/analyze-resume`, {
-      method: "POST",
-      body: formData
-    });
+    let response;
+
+    if (savedResumeId) {
+      const formData = new FormData();
+      if (targetRoleInput?.value?.trim()) {
+        formData.append("target_role", targetRoleInput.value.trim());
+      }
+
+      response = await hireReadyAnalysisFetch(`${HIRE_READY_ANALYSIS_API_BASE}/api/resume-analysis/analyze-saved/${savedResumeId}`, {
+        method: "POST",
+        body: formData
+      });
+    } else {
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+
+      if (targetRoleInput?.value?.trim()) {
+        formData.append("target_role", targetRoleInput.value.trim());
+      }
+
+      response = await hireReadyAnalysisFetch(`${HIRE_READY_ANALYSIS_API_BASE}/api/analyze-resume`, {
+        method: "POST",
+        body: formData
+      });
+    }
 
     const result = await response.json();
 
@@ -268,7 +328,7 @@ async function analyzeResume(event) {
       return;
     }
 
-    showAnalysisNotice("Resume analysis complete. Your improved resume has been saved to your dashboard.", "success");
+    showAnalysisNotice("Resume analysis complete. Your results have been saved to your dashboard.", "success");
     renderAnalysisResults(result);
     await checkAnalysisAvailability();
 
@@ -293,14 +353,20 @@ function initialiseResumeAnalysisPage() {
       <div class="analysis-hero">
         <p class="analysis-kicker">Hire Ready Premium Tool</p>
         <h1>Resume Optimiser & ATS Analysis</h1>
-        <p>Upload your existing resume, receive an ATS-focused analysis, and save an improved editable version directly to your dashboard.</p>
+        <p>Choose a saved resume or upload an existing file, receive an ATS-focused analysis, and save the results directly to your dashboard.</p>
       </div>
 
       <div id="analysis-notice" class="analysis-notice"></div>
 
       <form id="resume-analysis-form" class="analysis-form">
+        <label for="analysis-saved-resume">Choose Saved Resume</label>
+        <select id="analysis-saved-resume">
+          <option value="">Choose a saved resume, or upload a file below</option>
+        </select>
+        <p class="analysis-help">Select a resume already saved in your account, or leave this blank and upload a file.</p>
+
         <label for="analysis-file">Upload Resume</label>
-        <input id="analysis-file" type="file" accept=".pdf,.doc,.docx,.txt,.rtf" required>
+        <input id="analysis-file" type="file" accept=".pdf,.doc,.docx,.txt,.rtf">
         <p class="analysis-help">Accepted files: PDF, DOC, DOCX, TXT, RTF. Maximum file size: 10MB.</p>
 
         <label for="analysis-target-role">Target Role</label>
@@ -315,7 +381,9 @@ function initialiseResumeAnalysisPage() {
   `;
 
   document.getElementById("resume-analysis-form")?.addEventListener("submit", analyzeResume);
+  document.getElementById("analysis-saved-resume")?.addEventListener("change", handleSavedResumeSelection);
   checkAnalysisAvailability();
+  loadSavedResumesForAnalysis();
 }
 
 document.addEventListener("DOMContentLoaded", initialiseResumeAnalysisPage);
