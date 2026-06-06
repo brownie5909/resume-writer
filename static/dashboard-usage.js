@@ -83,10 +83,24 @@ console.log("Hire Ready dashboard-usage.js loaded");
     `;
   }
 
+  function combineCoverLetterUsage(usage) {
+    const generator = usage.cover_letter_generator_monthly || { used: 0, limit: 0, unlimited: false };
+    const optimiser = usage.cover_letter_optimiser_monthly || { used: 0, limit: 0, unlimited: false };
+    const generatorUnlimited = generator.unlimited || generator.limit === null || generator.limit === -1;
+    const optimiserUnlimited = optimiser.unlimited || optimiser.limit === null || optimiser.limit === -1;
+
+    return {
+      used: Number(generator.used || 0) + Number(optimiser.used || 0),
+      limit: generatorUnlimited || optimiserUnlimited ? null : Number(generator.limit || 0) + Number(optimiser.limit || 0),
+      unlimited: generatorUnlimited || optimiserUnlimited
+    };
+  }
+
   function renderUsage(container, data) {
     const usage = data.usage || {};
     const tier = String(data.tier || "basic").toUpperCase();
     const showUpgrade = data.upgrade && data.upgrade.show;
+    const coverLetterTools = combineCoverLetterUsage(usage);
 
     container.innerHTML = `
       <div style="margin:28px 0;padding:20px;border:1px solid #d9eaff;border-radius:16px;background:linear-gradient(135deg,#eff8ff,#ffffff);">
@@ -101,7 +115,8 @@ console.log("Hire Ready dashboard-usage.js loaded");
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;">
           ${createUsageRow("Saved Resumes", usage.resumes)}
           ${createUsageRow("Resume Analysis", usage.resume_analysis_monthly)}
-          ${createUsageRow("Version History", usage.resume_versions)}
+          ${createUsageRow("Cover Letter Tools", coverLetterTools)}
+          ${createUsageRow("Interview Prep", usage.interview_preparation_monthly)}
           ${createUsageRow("PDF Downloads", usage.pdf_downloads_monthly)}
         </div>
 
