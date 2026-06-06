@@ -62,11 +62,58 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
     status.innerHTML = escapeHtml(message || '');
   }
 
+  function getActionMode() {
+    return document.querySelector('input[name="clo-action-mode"]:checked')?.value || 'review';
+  }
+
   function setLoading(isLoading) {
     const button = document.getElementById('clo-submit');
     if (!button) return;
+    const mode = getActionMode();
     button.disabled = isLoading;
-    button.innerHTML = isLoading ? 'Optimising...' : 'Optimise Cover Letter';
+    if (isLoading) {
+      button.innerHTML = mode === 'review' ? 'Reviewing...' : 'Optimising...';
+    } else {
+      button.innerHTML = mode === 'review' ? 'Review Cover Letter' : 'Improve Cover Letter';
+    }
+  }
+
+  function renderList(items) {
+    if (!Array.isArray(items) || !items.length) return '<p>No items returned.</p>';
+    return `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+  }
+
+  function renderObjectAsList(value) {
+    if (!value || typeof value !== 'object') return '<p>No details returned.</p>';
+    return `
+      <ul>
+        ${Object.entries(value).map(([key, item]) => `
+          <li><strong>${escapeHtml(key.replaceAll('_', ' '))}:</strong> ${escapeHtml(typeof item === 'object' ? JSON.stringify(item) : item)}</li>
+        `).join('')}
+      </ul>
+    `;
+  }
+
+  function renderReviewSections(analysis) {
+    return `
+      <h3>Strengths</h3>
+      ${renderList(analysis.strengths)}
+
+      <h3>Weaknesses</h3>
+      ${renderList(analysis.weaknesses)}
+
+      <h3>Specific Improvements</h3>
+      ${renderList(analysis.specific_improvements || analysis.improvement_suggestions || analysis.suggestions)}
+
+      <h3>ATS Recommendations</h3>
+      ${renderList(analysis.ats_recommendations)}
+
+      <h3>Keyword Analysis</h3>
+      ${renderObjectAsList(analysis.keyword_analysis)}
+
+      <h3>Section Analysis</h3>
+      ${renderObjectAsList(analysis.sections_analysis)}
+    `;
   }
 
   function renderResults(result) {
@@ -74,17 +121,30 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
     if (!resultsBox) return;
 
     const analysis = result.analysis || {};
+    const isReview = result.mode === 'review';
+
     resultsBox.classList.add('active');
     resultsBox.innerHTML = `
       <div class="clo-card">
-        <h2>Your Cover Letter Optimisation</h2>
+        <h2>${isReview ? 'Your Cover Letter Review' : 'Your Cover Letter Improvement'}</h2>
         <div class="clo-score-grid">
           <div class="clo-score"><span>${escapeHtml(analysis.overall_score || 0)}</span><small>Overall</small></div>
           <div class="clo-score"><span>${escapeHtml(analysis.ats_score || 0)}</span><small>ATS</small></div>
           <div class="clo-score"><span>${escapeHtml(analysis.job_alignment_score || 0)}</span><small>Role Match</small></div>
         </div>
-        <h3>Optimised Cover Letter</h3>
-        <pre class="clo-output">${escapeHtml(result.improved_cover_letter || '')}</pre>
+
+        ${renderReviewSections(analysis)}
+
+        ${!isReview ? `
+          <h3>Original Cover Letter</h3>
+          <pre class="clo-output">${escapeHtml(result.original_cover_letter || '')}</pre>
+
+          <h3>Improved Cover Letter</h3>
+          <pre class="clo-output">${escapeHtml(result.improved_cover_letter || '')}</pre>
+        ` : `
+          <h3>Original Cover Letter</h3>
+          <pre class="clo-output">${escapeHtml(result.original_cover_letter || '')}</pre>
+        `}
       </div>
     `;
     resultsBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -109,6 +169,41 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
     `;
 
     firstCard.insertBefore(selectorWrap, firstCard.firstChild);
+  }
+
+  function insertActionSelector() {
+    const savedSelector = document.getElementById('clo-saved-cover-letter');
+    const existing = document.getElementById('clo-action-mode-wrap');
+    if (!savedSelector || existing) return;
+
+    const actionWrap = document.createElement('div');
+    actionWrap.id = 'clo-action-mode-wrap';
+    actionWrap.innerHTML = `
+      <label class="clo-label">Action</label>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:6px 0 12px;">
+        <label style="display:flex;gap:8px;align-items:flex-start;border:1px solid #e4e7ec;border-radius:12px;padding:12px;background:#fff;cursor:pointer;">
+          <input type="radio" name="clo-action-mode" value="review" checked style="margin-top:3px;">
+          <span><strong>Review Existing</strong><br><small style="color:#667085;">Get feedback and scores without rewriting.</small></span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:flex-start;border:1px solid #e4e7ec;border-radius:12px;padding:12px;background:#fff;cursor:pointer;">
+          <input type="radio" name="clo-action-mode" value="improve" style="margin-top:3px;">
+          <span><strong>Improve Existing</strong><br><small style="color:#667085;">Review, rewrite and save an improved version.</small></span>
+        </label>
+      </div>
+    `;
+
+    const selectHelp = savedSelector.nextElementSibling;
+    if (selectHelp) {
+      selectHelp.insertAdjacentElement('afterend', actionWrap);
+    } else {
+      savedSelector.insertAdjacentElement('afterend', actionWrap);
+    }
+
+    actionWrap.querySelectorAll('input[name="clo-action-mode"]').forEach(input => {
+      input.addEventListener('change', function () {
+        setLoading(false);
+      });
+    });
   }
 
   async function loadSavedCoverLetters() {
@@ -183,7 +278,7 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
       if (coverLetterInput) coverLetterInput.value = coverLetterText || '';
       if (fileInput) fileInput.value = '';
 
-      setStatus('Saved cover letter loaded. You can now review and optimise it.', 'success');
+      setStatus('Saved cover letter loaded. Choose Review or Improve, then continue.', 'success');
     } catch (error) {
       console.error('Saved cover letter load error:', error);
       setStatus('Could not load saved cover letter.', 'error');
@@ -227,6 +322,7 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
       return;
     }
 
+    const mode = getActionMode();
     setLoading(true);
 
     try {
@@ -241,7 +337,8 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
         formData.append('company_name', document.getElementById('clo-company')?.value || '');
         formData.append('job_posting', document.getElementById('clo-job-posting')?.value || '');
 
-        response = await hireReadyFetch(`${API_BASE}/api/cover-letter-optimiser/optimise-file`, {
+        const endpoint = mode === 'review' ? 'review-file' : 'optimise-file';
+        response = await hireReadyFetch(`${API_BASE}/api/cover-letter-optimiser/${endpoint}`, {
           method: 'POST',
           body: formData
         });
@@ -252,26 +349,32 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
           return;
         }
 
-        response = await hireReadyFetch(`${API_BASE}/api/cover-letter-optimiser/optimise`, {
+        const endpoint = mode === 'review' ? 'review' : 'optimise';
+        const payload = {
+          target_role: document.getElementById('clo-target-role')?.value || null,
+          company_name: document.getElementById('clo-company')?.value || null,
+          job_posting: document.getElementById('clo-job-posting')?.value || null,
+          cover_letter_text: coverLetterText
+        };
+
+        if (mode !== 'review') {
+          payload.title = document.getElementById('clo-title')?.value || 'Optimised Cover Letter';
+        }
+
+        response = await hireReadyFetch(`${API_BASE}/api/cover-letter-optimiser/${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: document.getElementById('clo-title')?.value || 'Optimised Cover Letter',
-            target_role: document.getElementById('clo-target-role')?.value || null,
-            company_name: document.getElementById('clo-company')?.value || null,
-            job_posting: document.getElementById('clo-job-posting')?.value || null,
-            cover_letter_text: coverLetterText
-          })
+          body: JSON.stringify(payload)
         });
       }
 
       const result = await response.json();
       if (!response.ok || !result.success) {
-        setStatus(result.error || result.detail || 'Optimisation failed.', 'error');
+        setStatus(result.error || result.detail || 'Cover letter action failed.', 'error');
         return;
       }
 
-      setStatus('Cover letter optimised and saved successfully.', 'success');
+      setStatus(mode === 'review' ? 'Cover letter review complete.' : 'Cover letter improved and saved successfully.', 'success');
       renderResults(result);
     } catch (error) {
       console.error('Cover letter optimiser error:', error);
@@ -286,9 +389,11 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
     if (!form) return;
 
     insertSavedSelector();
+    insertActionSelector();
     document.getElementById('clo-saved-cover-letter')?.addEventListener('change', applySavedCoverLetter);
     form.addEventListener('submit', optimiseCoverLetter);
     checkCanRun();
     loadSavedCoverLetters();
+    setLoading(false);
   });
 })();
