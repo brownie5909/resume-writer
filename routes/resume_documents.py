@@ -17,6 +17,9 @@ from app.services.resume_document_service import (
     list_resume_versions,
     get_resume_version,
 )
+from app.services.cover_letter_generator_service import get_cover_letter_generator_limit
+from app.services.cover_letter_optimiser_service import get_cover_letter_optimiser_limit
+from app.services.interview_preparation_service import get_interview_preparation_limit
 
 router = APIRouter()
 
@@ -174,11 +177,17 @@ async def dashboard_usage(current_user: dict = Depends(get_current_user)):
     resume_limit = get_saved_resume_limit_for_user(current_user)
     version_limit = get_version_limit_for_user(current_user)
     analysis_limit = get_resume_analysis_limit_for_user(current_user)
+    cover_letter_generator_limit = get_cover_letter_generator_limit(current_user)
+    cover_letter_optimiser_limit = get_cover_letter_optimiser_limit(current_user)
+    interview_preparation_limit = get_interview_preparation_limit(current_user)
 
     version_count = count_user_rows(user_id, "resume_versions")
     analysis_total_count = count_user_rows(user_id, "resume_analysis_results")
     analysis_month_count = get_usage_count(user_id, "resume_analysis", month_key)
     pdf_month_count = get_usage_count(user_id, "pdf_downloads", month_key)
+    cover_letter_generator_month_count = get_usage_count(user_id, "cover_letter_generator", month_key)
+    cover_letter_optimiser_month_count = get_usage_count(user_id, "cover_letter_optimiser", month_key)
+    interview_preparation_month_count = get_usage_count(user_id, "interview_preparation", month_key)
 
     return {
         "success": True,
@@ -205,6 +214,21 @@ async def dashboard_usage(current_user: dict = Depends(get_current_user)):
                 "limit": None,
                 "unlimited": True,
             },
+            "cover_letter_generator_monthly": {
+                "used": cover_letter_generator_month_count,
+                "limit": cover_letter_generator_limit,
+                "unlimited": cover_letter_generator_limit is None,
+            },
+            "cover_letter_optimiser_monthly": {
+                "used": cover_letter_optimiser_month_count,
+                "limit": cover_letter_optimiser_limit,
+                "unlimited": cover_letter_optimiser_limit is None,
+            },
+            "interview_preparation_monthly": {
+                "used": interview_preparation_month_count,
+                "limit": interview_preparation_limit,
+                "unlimited": interview_preparation_limit is None,
+            },
             "pdf_downloads_monthly": {
                 "used": pdf_month_count,
                 "limit": TIER_LIMITS[user_tier]["pdf_downloads_per_month"],
@@ -214,7 +238,7 @@ async def dashboard_usage(current_user: dict = Depends(get_current_user)):
         "upgrade": {
             "show": tier_name == "basic",
             "url": "/pricing",
-            "message": "Upgrade to Premium for unlimited resumes, unlimited ATS analyses and full version history.",
+            "message": "Upgrade to Premium for resume analysis, cover letter tools, interview preparation and more saved applications.",
         },
     }
 
@@ -402,37 +426,29 @@ async def delete_resume(document_id: str, current_user: dict = Depends(get_curre
     }
 
 
-@router.post("/resumes/{document_id}/pdf")
-async def regenerate_resume_pdf(document_id: str, current_user: dict = Depends(get_current_user)):
-    """Generate and download a fresh PDF from a saved resume document."""
-    document = get_resume_document(current_user["user_id"], document_id)
-    if not document:
-        raise HTTPException(status_code=404, detail="Resume document not found")
-
+@router.get("/resumes/{document_id}/pdf")
+async def download_resume_pdf(document_id: str, current_user: dict = Depends(get_current_user)):
     if not check_pdf_download_limit(current_user["user_id"]):
-        user_tier = get_user_tier_enhanced(current_user["user_id"])
         raise HTTPException(
             status_code=403,
             detail={
-                "error": "Monthly PDF download limit reached for your current plan",
+                "error": "PDF download limit reached for current plan",
                 "upgrade_required": True,
-                "current_tier": user_tier.value,
                 "upgrade_url": "/pricing",
             },
         )
 
-    pdf_bytes = generate_resume_pdf(
-        resume_text=document.get("resume_text", ""),
-        cover_letter=document.get("cover_letter_text", ""),
-    )
+    document = get_resume_document(current_user["user_id"], document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Resume document not found")
 
+    pdf_buffer = BytesIO(generate_resume_pdf(document["resume_text"], template=document.get("template", "default")))
     track_pdf_usage(current_user["user_id"])
 
-    safe_title = "".join(c if c.isalnum() or c in (" ", "-", "_") else "" for c in document.get("title", "resume")).strip()
-    safe_title = safe_title.replace(" ", "_") or "resume"
+    filename = f"{document['title'].replace(' ', '_')}.pdf"
 
     return StreamingResponse(
-        BytesIO(pdf_bytes),
+        pdf_buffer,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={safe_title}.pdf"},
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
