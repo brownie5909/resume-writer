@@ -1,0 +1,243 @@
+/* Hire Ready Admin Dashboard */
+
+.hr-admin-wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  color: #101828;
+  font-family: inherit;
+}
+
+.hr-admin-hero {
+  border: 1px solid #d9eaff;
+  border-radius: 18px;
+  padding: 24px;
+  background: linear-gradient(135deg, #eff8ff, #ffffff);
+  margin-bottom: 20px;
+}
+
+.hr-admin-hero h1 {
+  margin: 0 0 8px;
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.1;
+  color: #101828;
+}
+
+.hr-admin-hero p {
+  margin: 0;
+  color: #475467;
+  font-size: 16px;
+}
+
+.hr-admin-status {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f2f4f7;
+  color: #344054;
+  font-weight: 700;
+}
+
+.hr-admin-status.success {
+  background: #ecfdf3;
+  color: #027a48;
+  border: 1px solid #abefc6;
+}
+
+.hr-admin-status.error {
+  background: #fef3f2;
+  color: #b42318;
+  border: 1px solid #fecdca;
+}
+
+.hr-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 18px 0 24px;
+}
+
+.hr-admin-card {
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  padding: 16px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.hr-admin-card span {
+  display: block;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.hr-admin-card strong {
+  display: block;
+  font-size: 26px;
+  color: #101828;
+}
+
+.hr-admin-panel {
+  border: 1px solid #e4e7ec;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 18px;
+  margin-top: 18px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.hr-admin-panel h2 {
+  margin: 0 0 14px;
+  color: #101828;
+  font-size: 24px;
+}
+
+.hr-admin-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.hr-admin-input,
+.hr-admin-select {
+  min-height: 44px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #101828;
+  background: #ffffff;
+  font-size: 14px;
+}
+
+.hr-admin-input {
+  flex: 1 1 260px;
+}
+
+.hr-admin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid #1570ef;
+  border-radius: 10px;
+  background: #1570ef;
+  color: #ffffff !important;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.hr-admin-btn:hover {
+  background: #175cd3;
+  transform: translateY(-1px);
+}
+
+.hr-admin-btn.secondary {
+  background: #ffffff;
+  color: #344054 !important;
+  border-color: #d0d5dd;
+}
+
+.hr-admin-btn.danger {
+  background: #d92d20;
+  border-color: #d92d20;
+}
+
+.hr-admin-table-wrap {
+  overflow-x: auto;
+}
+
+.hr-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 820px;
+}
+
+.hr-admin-table th,
+.hr-admin-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #eaecf0;
+  text-align: left;
+  vertical-align: middle;
+  font-size: 14px;
+}
+
+.hr-admin-table th {
+  color: #475467;
+  font-weight: 800;
+  background: #f9fafb;
+}
+
+.hr-admin-pill {
+  display: inline-flex;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.hr-admin-pill.basic {
+  background: #f2f4f7;
+  color: #344054;
+}
+
+.hr-admin-pill.premium {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.hr-admin-pill.professional {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.hr-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hr-admin-details {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #d9eaff;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.hr-admin-details pre {
+  white-space: pre-wrap;
+  background: #101828;
+  color: #f9fafb;
+  border-radius: 12px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+@media (max-width: 720px) {
+  .hr-admin-wrap {
+    padding: 16px 10px 36px;
+  }
+
+  .hr-admin-hero,
+  .hr-admin-panel {
+    padding: 16px;
+  }
+
+  .hr-admin-controls {
+    display: grid;
+  }
+
+  .hr-admin-input,
+  .hr-admin-select,
+  .hr-admin-btn {
+    width: 100%;
+  }
+}
