@@ -12,6 +12,22 @@ VALID_ADMIN_TIERS = ["basic", "premium", "professional"]
 LEGACY_BASIC_TIERS = ["basic", "free"]
 
 
+def row_get(row, key, index=None, default=None):
+    """Read values safely from sqlite RowDict or psycopg2 RealDictRow."""
+    if row is None:
+        return default
+    try:
+        return row[key]
+    except Exception:
+        pass
+    if index is not None:
+        try:
+            return row[index]
+        except Exception:
+            pass
+    return default
+
+
 def require_admin_access(current_user: dict = Depends(get_current_user)):
     """Require admin access using the is_admin flag stored in the users table."""
     with get_db() as conn:
@@ -29,7 +45,8 @@ def require_admin_access(current_user: dict = Depends(get_current_user)):
         if not result:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not found")
 
-        is_admin, is_active = result
+        is_admin = bool(row_get(result, "is_admin", 0, False))
+        is_active = bool(row_get(result, "is_active", 1, False))
         if not is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deactivated")
         if not is_admin:
@@ -77,36 +94,43 @@ def parse_datetime(value):
     return datetime.fromisoformat(str(value))
 
 
+def normalise_tier(tier_value):
+    tier_value = tier_value or "basic"
+    return "basic" if tier_value == "free" else tier_value
+
+
 @router.get("/admin/stats", response_model=AdminStats)
 async def get_admin_stats(admin_user: dict = Depends(require_admin_access)):
     """Get admin statistics for the internal admin dashboard."""
     with get_db() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("SELECT COUNT(*) FROM users WHERE is_active = TRUE")
-        total_users = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) AS total FROM users WHERE is_active = TRUE")
+        total_users = int(row_get(cursor.fetchone(), "total", 0, 0))
 
-        cursor.execute("SELECT tier, COUNT(*) FROM users WHERE is_active = TRUE GROUP BY tier")
-        tier_counts = dict(cursor.fetchall())
+        cursor.execute("SELECT tier, COUNT(*) AS total FROM users WHERE is_active = TRUE GROUP BY tier")
+        tier_counts = {}
+        for row in cursor.fetchall():
+            tier_counts[row_get(row, "tier", 0, "basic")] = int(row_get(row, "total", 1, 0))
 
-        cursor.execute("SELECT COUNT(*) FROM users WHERE is_verified = TRUE AND is_active = TRUE")
-        verified_users = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) AS total FROM users WHERE is_verified = TRUE AND is_active = TRUE")
+        verified_users = int(row_get(cursor.fetchone(), "total", 0, 0))
 
         cursor.execute(
             """
-            SELECT COUNT(*) FROM users
+            SELECT COUNT(*) AS total FROM users
             WHERE last_login > datetime('now', '-30 days') AND is_active = TRUE
             """
         )
-        active_users = cursor.fetchone()[0]
+        active_users = int(row_get(cursor.fetchone(), "total", 0, 0))
 
         cursor.execute(
             """
-            SELECT COUNT(*) FROM users
+            SELECT COUNT(*) AS total FROM users
             WHERE created_at > datetime('now', '-30 days') AND is_active = TRUE
             """
         )
-        monthly_signups = cursor.fetchone()[0]
+        monthly_signups = int(row_get(cursor.fetchone(), "total", 0, 0))
 
         basic_users = sum(tier_counts.get(tier, 0) for tier in LEGACY_BASIC_TIERS)
         premium_users = tier_counts.get("premium", 0)
@@ -174,18 +198,17 @@ async def get_all_users(
 
     users = []
     for row in rows:
-        tier_value = row[3] or "basic"
         users.append(
             UserResponse(
-                user_id=row[0],
-                email=row[1],
-                full_name=row[2],
-                tier="basic" if tier_value == "free" else tier_value,
-                is_verified=bool(row[4]),
-                is_active=bool(row[5]),
-                created_at=parse_datetime(row[6]),
-                last_login=parse_datetime(row[7]),
-                stripe_customer_id=row[8],
+                user_id=row_get(row, "user_id", 0),
+                email=row_get(row, "email", 1),
+                full_name=row_get(row, "full_name", 2),
+                tier=normalise_tier(row_get(row, "tier", 3)),
+                is_verified=bool(row_get(row, "is_verified", 4, False)),
+                is_active=bool(row_get(row, "is_active", 5, False)),
+                created_at=parse_datetime(row_get(row, "created_at", 6)),
+                last_login=parse_datetime(row_get(row, "last_login", 7)),
+                stripe_customer_id=row_get(row, "stripe_customer_id", 8),
             )
         )
 
@@ -225,13 +248,12 @@ async def get_user_details(user_id: str, admin_user: dict = Depends(require_admi
         )
         sessions = cursor.fetchall()
 
-    tier_value = user.get("tier") or "basic"
     return {
         "user": UserResponse(
             user_id=user["user_id"],
             email=user["email"],
             full_name=user["full_name"],
-            tier="basic" if tier_value == "free" else tier_value,
+            tier=normalise_tier(user.get("tier")),
             is_verified=bool(user["is_verified"]),
             is_active=bool(user["is_active"]),
             created_at=parse_datetime(user["created_at"]),
@@ -239,11 +261,19 @@ async def get_user_details(user_id: str, admin_user: dict = Depends(require_admi
             stripe_customer_id=user.get("stripe_customer_id"),
         ),
         "usage_statistics": [
-            {"feature": stat[0], "count": stat[1], "month": stat[2]}
+            {
+                "feature": row_get(stat, "feature_name", 0),
+                "count": row_get(stat, "usage_count", 1, 0),
+                "month": row_get(stat, "month_year", 2),
+            }
             for stat in usage_stats
         ],
         "recent_sessions": [
-            {"created_at": session[0], "last_used": session[1], "is_active": bool(session[2])}
+            {
+                "created_at": row_get(session, "created_at", 0),
+                "last_used": row_get(session, "last_used", 1),
+                "is_active": bool(row_get(session, "is_active", 2, False)),
+            }
             for session in sessions
         ],
     }
