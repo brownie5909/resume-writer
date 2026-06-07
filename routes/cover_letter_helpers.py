@@ -120,6 +120,103 @@ async def ai_generate_cover_letter(
             job_posting, applicant_name, current_role, experience, achievements, company_name, tone_preference
         )
 
+
+async def ai_retarget_cover_letter(
+    source_cover_letter: str,
+    job_posting: str,
+    target_role: str,
+    company_name: Optional[str] = None,
+    tone_preference: str = "professional",
+) -> str:
+    """Adapt an existing cover letter for a new role and save it as a new generated letter."""
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        print("⚠️ OpenAI API key not found, using enhanced retarget fallback")
+        return generate_retarget_template_cover_letter(
+            source_cover_letter=source_cover_letter,
+            job_posting=job_posting,
+            target_role=target_role,
+            company_name=company_name,
+        )
+
+    company_text = company_name or extract_company_from_posting(job_posting) or "the organisation"
+
+    prompt = f"""
+    You are an expert career coach and professional cover letter writer.
+
+    Retarget the existing cover letter below for a new job application.
+
+    Existing Cover Letter:
+    {source_cover_letter}
+
+    New Target Role:
+    {target_role}
+
+    Company:
+    {company_text}
+
+    New Job Advertisement / Role Description:
+    {job_posting}
+
+    Requirements:
+    1. Keep the applicant's genuine experience, achievements, and professional identity from the original cover letter.
+    2. Adapt the opening, examples, keywords, and emphasis to match the new target role and job advertisement.
+    3. Do not invent qualifications, licences, employers, dates, degrees, or achievements that are not supported by the original letter.
+    4. Use relevant keywords from the new job advertisement for ATS alignment.
+    5. Make the letter sound natural, confident, and professional.
+    6. Keep it concise, around 250-400 words.
+    7. Include a proper greeting and professional sign-off.
+    8. Return ONLY the full retargeted cover letter text. Do not include notes, markdown, analysis, headings, or commentary.
+    """
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": f"Bearer {openai_api_key}",
+                "Content-Type": "application/json",
+            }
+            data = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You retarget existing cover letters for new roles. Preserve truthful applicant details and output only the finished cover letter.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.65,
+                "max_tokens": 1200,
+            }
+
+            async with session.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=30,
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    retargeted_letter = result["choices"][0]["message"]["content"].strip()
+                    print(f"✅ AI retarget completed (length: {len(retargeted_letter)} chars)")
+                    return retargeted_letter
+
+                print(f"⚠️ OpenAI API retarget error: {response.status}, using fallback")
+                return generate_retarget_template_cover_letter(
+                    source_cover_letter=source_cover_letter,
+                    job_posting=job_posting,
+                    target_role=target_role,
+                    company_name=company_name,
+                )
+    except Exception as e:
+        print(f"⚠️ AI retarget error: {e}, using fallback")
+        return generate_retarget_template_cover_letter(
+            source_cover_letter=source_cover_letter,
+            job_posting=job_posting,
+            target_role=target_role,
+            company_name=company_name,
+        )
+
+
 def extract_role_from_posting(job_posting: str) -> Optional[str]:
     """Extract job role/title from posting text"""
     lines = job_posting.split('\n')[:5]  # Check first 5 lines
@@ -218,3 +315,26 @@ Sincerely,
 {applicant_name}"""
     
     return enhanced_template
+
+
+def generate_retarget_template_cover_letter(
+    source_cover_letter: str,
+    job_posting: str,
+    target_role: str,
+    company_name: Optional[str] = None,
+) -> str:
+    """Fallback retargeting template when AI is unavailable."""
+    company_text = company_name or extract_company_from_posting(job_posting) or "your organisation"
+    source_snippet = " ".join((source_cover_letter or "").split())[:500]
+
+    return f"""Dear Hiring Manager,
+
+I am writing to express my strong interest in the {target_role} role at {company_text}. My existing experience and achievements align well with the responsibilities of this position, and I am excited by the opportunity to contribute to your team.
+
+In my previous application material, I highlighted the following relevant background: {source_snippet}
+
+For this role, I am particularly focused on demonstrating the skills, reliability, communication ability, and practical experience needed to meet the requirements outlined in your advertisement. I am confident that my background, combined with my willingness to adapt and contribute, would allow me to add value quickly.
+
+I would welcome the opportunity to discuss how my experience can support {company_text}'s goals. Thank you for considering my application.
+
+Sincerely,"""
