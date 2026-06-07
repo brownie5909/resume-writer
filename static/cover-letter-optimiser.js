@@ -7,6 +7,14 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
     return localStorage.getItem('hire_ready_token');
   }
 
+  function getStoredUser() {
+    try {
+      return JSON.parse(localStorage.getItem('hire_ready_user') || '{}');
+    } catch (error) {
+      return {};
+    }
+  }
+
   function escapeHtml(value) {
     if (value === null || value === undefined) return '';
     return String(value)
@@ -72,9 +80,9 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
     const mode = getActionMode();
     button.disabled = isLoading;
     if (isLoading) {
-      button.innerHTML = mode === 'review' ? 'Reviewing...' : 'Optimising...';
+      button.innerHTML = mode === 'review' ? 'Reviewing...' : mode === 'retarget' ? 'Retargeting...' : 'Optimising...';
     } else {
-      button.innerHTML = mode === 'review' ? 'Review Cover Letter' : 'Improve Cover Letter';
+      button.innerHTML = mode === 'review' ? 'Review Cover Letter' : mode === 'retarget' ? 'Retarget Cover Letter' : 'Improve Cover Letter';
     }
   }
 
@@ -130,11 +138,14 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
 
     const analysis = result.analysis || {};
     const isReview = result.mode === 'review';
+    const isRetarget = result.mode === 'retarget';
+    const resultTitle = isReview ? 'Your Cover Letter Review' : isRetarget ? 'Your Retargeted Cover Letter' : 'Your Cover Letter Improvement';
+    const finalLetter = result.cover_letter || result.improved_cover_letter || '';
 
     resultsBox.classList.add('active');
     resultsBox.innerHTML = `
       <div class="clo-card">
-        <h2>${isReview ? 'Your Cover Letter Review' : 'Your Cover Letter Improvement'}</h2>
+        <h2>${resultTitle}</h2>
         <div class="clo-score-grid">
           <div class="clo-score"><span>${escapeHtml(analysis.overall_score || 0)}</span><small>Overall</small></div>
           <div class="clo-score"><span>${escapeHtml(analysis.ats_score || 0)}</span><small>ATS</small></div>
@@ -143,12 +154,18 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
 
         ${renderReviewSections(analysis)}
 
-        ${!isReview ? `
+        ${isRetarget ? `
+          <h3>Source Cover Letter</h3>
+          <pre class="clo-output">${escapeHtml(result.source_cover_letter || '')}</pre>
+
+          <h3>Retargeted Cover Letter</h3>
+          <pre class="clo-output">${escapeHtml(finalLetter)}</pre>
+        ` : !isReview ? `
           <h3>Original Cover Letter</h3>
           <pre class="clo-output">${escapeHtml(result.original_cover_letter || '')}</pre>
 
           <h3>Improved Cover Letter</h3>
-          <pre class="clo-output">${escapeHtml(result.improved_cover_letter || '')}</pre>
+          <pre class="clo-output">${escapeHtml(finalLetter)}</pre>
         ` : `
           <h3>Original Cover Letter</h3>
           <pre class="clo-output">${escapeHtml(result.original_cover_letter || '')}</pre>
@@ -199,6 +216,10 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
           <input type="radio" name="clo-action-mode" value="improve" style="margin-top:3px;">
           <span><strong>Improve Existing</strong><br><small style="color:#667085;">Review, rewrite and save an improved version.</small></span>
         </label>
+        <label style="display:flex;gap:8px;align-items:flex-start;border:1px solid #e4e7ec;border-radius:12px;padding:12px;background:#fff;cursor:pointer;">
+          <input type="radio" name="clo-action-mode" value="retarget" style="margin-top:3px;">
+          <span><strong>Retarget For New Role</strong><br><small style="color:#667085;">Adapt this letter for a different job and save a new version.</small></span>
+        </label>
       </div>
     `;
 
@@ -212,6 +233,10 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
     actionWrap.querySelectorAll('input[name="clo-action-mode"]').forEach(input => {
       input.addEventListener('change', function () {
         setLoading(false);
+        const fileInput = document.getElementById('clo-file');
+        if (getActionMode() === 'retarget' && fileInput) {
+          fileInput.value = '';
+        }
       });
     });
   }
@@ -288,7 +313,7 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
       if (coverLetterInput) coverLetterInput.value = coverLetterText || '';
       if (fileInput) fileInput.value = '';
 
-      setStatus('Saved cover letter loaded. Choose Review or Improve, then continue.', 'success');
+      setStatus('Saved cover letter loaded. Choose Review, Improve or Retarget, then continue.', 'success');
     } catch (error) {
       console.error('Saved cover letter load error:', error);
       setStatus('Could not load saved cover letter.', 'error');
@@ -337,6 +362,54 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
 
     try {
       const file = document.getElementById('clo-file')?.files?.[0];
+      const coverLetterText = document.getElementById('clo-cover-letter')?.value || '';
+
+      if (mode === 'retarget') {
+        if (file) {
+          setStatus('For retargeting, please select a saved cover letter or paste the existing cover letter text. File upload can still be used for Review or Improve.', 'error');
+          return;
+        }
+        if (coverLetterText.trim().length < 50) {
+          setStatus('Please choose a saved cover letter or paste at least 50 characters to retarget.', 'error');
+          return;
+        }
+        if ((document.getElementById('clo-target-role')?.value || '').trim().length < 2) {
+          setStatus('Please enter the new target role.', 'error');
+          return;
+        }
+        if ((document.getElementById('clo-job-posting')?.value || '').trim().length < 50) {
+          setStatus('Please paste the new job advertisement or role description.', 'error');
+          return;
+        }
+
+        const user = getStoredUser();
+        const payload = {
+          title: document.getElementById('clo-title')?.value || `Retargeted Cover Letter - ${document.getElementById('clo-target-role')?.value || 'New Role'}`,
+          applicant_name: user.full_name || user.email || null,
+          source_cover_letter: coverLetterText,
+          target_role: document.getElementById('clo-target-role')?.value || '',
+          company_name: document.getElementById('clo-company')?.value || null,
+          job_posting: document.getElementById('clo-job-posting')?.value || '',
+          tone_preference: 'professional'
+        };
+
+        const response = await hireReadyFetch(`${API_BASE}/api/cover-letter-generator/retarget`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          setStatus(result.error || result.detail || 'Cover letter retargeting failed.', 'error');
+          return;
+        }
+
+        setStatus('Cover letter retargeted and saved successfully.', 'success');
+        renderResults(result);
+        return;
+      }
+
       let response;
 
       if (file) {
@@ -353,7 +426,6 @@ console.log('Hire Ready cover-letter-optimiser.js loaded');
           body: formData
         });
       } else {
-        const coverLetterText = document.getElementById('clo-cover-letter')?.value || '';
         if (coverLetterText.trim().length < 50) {
           setStatus('Please choose a saved cover letter, upload a file, or paste at least 50 characters.', 'error');
           return;
