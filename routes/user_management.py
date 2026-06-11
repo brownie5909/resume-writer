@@ -422,7 +422,7 @@ async def get_all_tiers():
             "name": "Basic",
             "description": TIER_LIMITS[UserTier.BASIC]["description"],
             "features": TIER_LIMITS[UserTier.BASIC]["features"],
-            "pdf_downloads": "1/month"
+            "pdf_downloads": "3/month"
         },
         "premium": {
             "name": "Premium",
