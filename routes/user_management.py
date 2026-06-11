@@ -40,12 +40,12 @@ class UserTier(Enum):
 
 TIER_LIMITS = {
     UserTier.BASIC: {
-        "pdf_downloads_per_month": 1,
+        "pdf_downloads_per_month": 3,
         "features": ["resume_builder", "company_research"],
         "description": "Basic resume builder + Company research"
     },
     UserTier.FREE: {
-        "pdf_downloads_per_month": 1,
+        "pdf_downloads_per_month": 3,
         "features": ["resume_builder", "company_research"],
         "description": "Basic resume builder + Company research"
     },
