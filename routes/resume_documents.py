@@ -442,11 +442,8 @@ async def download_resume_pdf(document_id: str, current_user: dict = Depends(get
     if not document:
         raise HTTPException(status_code=404, detail="Resume document not found")
 
-   pdf_buffer = BytesIO(
-    generate_resume_pdf(
-        document["resume_text"]
-    )
-)
+       pdf_buffer = BytesIO(generate_resume_pdf(document["resume_text"]))
+
     track_pdf_usage(current_user["user_id"])
 
     filename = f"{document['title'].replace(' ', '_')}.pdf"
