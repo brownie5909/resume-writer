@@ -136,15 +136,7 @@ async function hireReadyFetch(url, options = {}) {
     return response;
   }
 
-  const refreshResponse = await fetch(`${API_BASE}/api/auth/refresh`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      refresh_token: refreshToken
-    })
-  });
+  const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}/pdf`);
 
   if (!refreshResponse.ok) {
     localStorage.removeItem("hire_ready_token");
