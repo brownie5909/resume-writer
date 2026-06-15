@@ -104,7 +104,7 @@ console.log('Hire Ready dashboard-cover-letters.js loaded');
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <a href="/cover-letter-generator/" class="resume-btn">Generate New</a>
-            <a href="/cover-letter-optimiser/" class="resume-btn" onclick="window.location.href='/cover-letter-optimiser/'; return false;">Review Existing</a>
+            <a href="/cover-letter-optimiser/" class="resume-btn" onclick="window.location.href='/cover-letter-optimiser/'; return false;">Cover Letter Tools</a>
           </div>
         </div>
 
