@@ -60,6 +60,51 @@ def update_user_stripe_customer_id(user_id: str, customer_id: str) -> None:
         conn.commit()
 
 
+def update_user_subscription(
+    user_id: str,
+    tier: str,
+    customer_id: Optional[str],
+    subscription_id: Optional[str],
+) -> None:
+    if tier not in PRICE_ENV_BY_TIER:
+        raise ValueError("Invalid subscription tier")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE users
+            SET tier = ?,
+                stripe_customer_id = COALESCE(?, stripe_customer_id),
+                stripe_subscription_id = COALESCE(?, stripe_subscription_id),
+                is_active = TRUE,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+            """,
+            (tier, customer_id, subscription_id, user_id),
+        )
+        conn.commit()
+
+
+def cancel_user_subscription_access(subscription_id: Optional[str]) -> None:
+    if not subscription_id:
+        return
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE users
+            SET tier = 'basic',
+                stripe_subscription_id = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE stripe_subscription_id = ?
+            """,
+            (subscription_id,),
+        )
+        conn.commit()
+
+
 @router.post("/subscriptions/create-checkout")
 async def create_checkout_session(
     tier: str,
@@ -127,9 +172,9 @@ async def get_current_subscription(current_user: dict = Depends(get_current_user
         subscription_data = SubscriptionResponse(
             subscription_id=current_user.get("stripe_subscription_id"),
             customer_id=current_user.get("stripe_customer_id"),
-            status="active" if current_user["tier"] != "free" else "inactive",
-            current_period_start=datetime.now() if current_user["tier"] != "free" else None,
-            current_period_end=datetime.now() + timedelta(days=30) if current_user["tier"] != "free" else None,
+            status="active" if current_user["tier"] not in ("free", "basic") else "inactive",
+            current_period_start=datetime.now() if current_user["tier"] not in ("free", "basic") else None,
+            current_period_end=datetime.now() + timedelta(days=30) if current_user["tier"] not in ("free", "basic") else None,
             tier=current_user["tier"],
             amount=1900 if current_user["tier"] == "premium" else 3900 if current_user["tier"] == "professional" else None,
             currency="usd",
@@ -139,7 +184,7 @@ async def get_current_subscription(current_user: dict = Depends(get_current_user
         return SubscriptionResponse(
             subscription_id=None,
             customer_id=current_user.get("stripe_customer_id"),
-            status="active" if current_user["tier"] != "free" else "inactive",
+            status="active" if current_user["tier"] not in ("free", "basic") else "inactive",
             current_period_start=None,
             current_period_end=None,
             tier=current_user["tier"],
@@ -154,7 +199,7 @@ async def change_subscription_tier(
     current_user: dict = Depends(get_current_user),
 ):
     """Change subscription tier (mock for testing)."""
-    if new_tier not in ["free", "premium", "professional"]:
+    if new_tier not in ["free", "basic", "premium", "professional"]:
         raise HTTPException(status_code=400, detail="Invalid tier")
 
     current_tier = current_user["tier"]
@@ -162,13 +207,13 @@ async def change_subscription_tier(
     if new_tier == current_tier:
         raise HTTPException(status_code=400, detail="Already on this tier")
 
-    if new_tier == "free":
+    if new_tier in ("free", "basic"):
         return {
             "message": "Subscription would be canceled (mock)",
-            "tier": "free",
+            "tier": "basic",
             "note": "In production, this would cancel the Stripe subscription",
         }
-    elif current_tier == "free":
+    elif current_tier in ("free", "basic"):
         return {
             "message": f"Would create new {new_tier} subscription (mock)",
             "tier": new_tier,
@@ -178,19 +223,19 @@ async def change_subscription_tier(
         return {
             "message": f"Would change from {current_tier} to {new_tier} (mock)",
             "tier": new_tier,
-            "note": "In production, this would modify the existing Stripe subscription",
+            "note": "In production, this would modify the existing subscription",
         }
 
 
 @router.post("/subscriptions/cancel")
 async def cancel_user_subscription(current_user: dict = Depends(get_current_user)):
     """Cancel current subscription (mock for testing)."""
-    if current_user["tier"] == "free":
+    if current_user["tier"] in ("free", "basic"):
         raise HTTPException(status_code=400, detail="No active subscription to cancel")
 
     return {
         "message": f"Would cancel {current_user['tier']} subscription (mock)",
-        "tier": "free",
+        "tier": "basic",
         "note": "In production, this would cancel the Stripe subscription at period end",
     }
 
@@ -245,11 +290,46 @@ async def get_invoices(
 
 @router.post("/subscriptions/webhook")
 async def handle_stripe_webhook(request: Request):
-    """Handle Stripe webhook events (mock for testing)."""
+    """Handle Stripe webhook events that update Hire Ready user subscription access."""
+    stripe.api_key = get_stripe_secret_key()
     payload = await request.body()
+    signature = request.headers.get("stripe-signature")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
 
-    return {
-        "status": "success",
-        "message": "Mock webhook handler - would process real Stripe events in production",
-        "payload_size": len(payload),
-    }
+    try:
+        if webhook_secret:
+            event = stripe.Webhook.construct_event(payload, signature, webhook_secret)
+        else:
+            event = stripe.Event.construct_from(await request.json(), stripe.api_key)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Stripe webhook payload")
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature")
+
+    event_type = event.get("type")
+    event_object = event.get("data", {}).get("object", {})
+
+    if event_type == "checkout.session.completed":
+        metadata = event_object.get("metadata", {}) or {}
+        user_id = metadata.get("user_id") or event_object.get("client_reference_id")
+        tier = metadata.get("tier")
+        customer_id = event_object.get("customer")
+        subscription_id = event_object.get("subscription")
+
+        if user_id and tier in PRICE_ENV_BY_TIER:
+            update_user_subscription(
+                user_id=user_id,
+                tier=tier,
+                customer_id=customer_id,
+                subscription_id=subscription_id,
+            )
+            return {"success": True, "handled": event_type, "user_id": user_id, "tier": tier}
+
+        return {"success": False, "handled": event_type, "message": "Missing user_id or tier metadata"}
+
+    if event_type == "customer.subscription.deleted":
+        subscription_id = event_object.get("id")
+        cancel_user_subscription_access(subscription_id)
+        return {"success": True, "handled": event_type, "subscription_id": subscription_id}
+
+    return {"success": True, "handled": False, "event_type": event_type}
