@@ -127,7 +127,7 @@ def track_pdf_usage(user_id: str):
                 SET usage_count = ?, last_reset = CURRENT_TIMESTAMP
                 WHERE user_id = ? AND feature_name = 'pdf_downloads' AND month_year = ?
                 """,
-                (result[0] + 1, user_id, current_month),
+                (result["usage_count"] + 1, user_id, current_month),
             )
         else:
             cursor.execute(
@@ -161,7 +161,7 @@ def check_pdf_download_limit(user_id: str) -> bool:
             (user_id, current_month),
         )
         result = cursor.fetchone()
-        current_usage = result[0] if result else 0
+        current_usage = result["usage_count"] if result else 0
         return current_usage < limit
 
 
