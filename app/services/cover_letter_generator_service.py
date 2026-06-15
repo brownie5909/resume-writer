@@ -21,7 +21,7 @@ def get_cover_letter_generator_limit(current_user: dict) -> Optional[int]:
     if user_tier.value in ("premium", "professional"):
         return None
 
-    return 0
+    return 1
 
 
 def get_cover_letter_generator_usage(user_id: str, month_year: Optional[str] = None) -> int:
