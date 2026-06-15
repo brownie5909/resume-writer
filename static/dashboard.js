@@ -772,9 +772,7 @@ async function downloadResume(documentId, button) {
   setButtonLoading(button, true, "Preparing PDF...");
 
   try {
-    const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}/pdf`, {
-      method: "POST"
-    });
+    const response = await hireReadyFetch(`${API_BASE}/api/resumes/${documentId}/pdf`);
 
     if (!response.ok) {
       const error = await response.json();
