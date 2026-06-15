@@ -28,6 +28,15 @@ PRICE_ENV_BY_TIER = {
 }
 
 
+def stripe_value(obj, key, default=None):
+    try:
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+    except Exception:
+        return default
+
+
 def get_stripe_secret_key() -> str:
     secret_key = os.getenv("STRIPE_SECRET_KEY", "").strip()
     if not secret_key:
@@ -153,12 +162,12 @@ async def create_checkout_session(
 
         checkout_session = stripe.checkout.Session.create(**session_params)
 
-        if checkout_session.customer and not existing_customer_id:
-            update_user_stripe_customer_id(current_user["user_id"], checkout_session.customer)
+        if stripe_value(checkout_session, "customer") and not existing_customer_id:
+            update_user_stripe_customer_id(current_user["user_id"], stripe_value(checkout_session, "customer"))
 
         return {
-            "checkout_url": checkout_session.url,
-            "session_id": checkout_session.id,
+            "checkout_url": stripe_value(checkout_session, "url"),
+            "session_id": stripe_value(checkout_session, "id"),
             "tier": tier,
         }
 
@@ -306,15 +315,16 @@ async def handle_stripe_webhook(request: Request):
                 content={"success": False, "error": "STRIPE_WEBHOOK_SECRET is not configured"},
             )
 
-        event_type = event.get("type")
-        event_object = event.get("data", {}).get("object", {})
+        event_type = stripe_value(event, "type")
+        data = stripe_value(event, "data", {}) or {}
+        event_object = stripe_value(data, "object", {}) or {}
 
         if event_type == "checkout.session.completed":
-            metadata = event_object.get("metadata", {}) or {}
-            user_id = metadata.get("user_id") or event_object.get("client_reference_id")
-            tier = metadata.get("tier")
-            customer_id = event_object.get("customer")
-            subscription_id = event_object.get("subscription")
+            metadata = stripe_value(event_object, "metadata", {}) or {}
+            user_id = stripe_value(metadata, "user_id") or stripe_value(event_object, "client_reference_id")
+            tier = stripe_value(metadata, "tier")
+            customer_id = stripe_value(event_object, "customer")
+            subscription_id = stripe_value(event_object, "subscription")
 
             if user_id and tier in PRICE_ENV_BY_TIER:
                 update_user_subscription(
@@ -331,7 +341,7 @@ async def handle_stripe_webhook(request: Request):
             )
 
         if event_type == "customer.subscription.deleted":
-            subscription_id = event_object.get("id")
+            subscription_id = stripe_value(event_object, "id")
             cancel_user_subscription_access(subscription_id)
             return {"success": True, "handled": event_type, "subscription_id": subscription_id}
 
