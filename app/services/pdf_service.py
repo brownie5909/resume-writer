@@ -3,6 +3,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet
 
+def generate_resume_pdf(resume_text, template_name="default"):
 
 def generate_resume_pdf(resume_text: str, cover_letter: str = "") -> bytes:
     """Generate a clean ATS-friendly PDF resume."""
