@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta
@@ -161,7 +162,7 @@ async def create_checkout_session(
             "tier": tier,
         }
 
-    except stripe.error.StripeError as error:
+    except Exception as error:
         raise HTTPException(status_code=502, detail=f"Stripe checkout error: {str(error)}")
 
 
@@ -291,45 +292,54 @@ async def get_invoices(
 @router.post("/subscriptions/webhook")
 async def handle_stripe_webhook(request: Request):
     """Handle Stripe webhook events that update Hire Ready user subscription access."""
-    stripe.api_key = get_stripe_secret_key()
-    payload = await request.body()
-    signature = request.headers.get("stripe-signature")
-    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
-
     try:
+        stripe.api_key = get_stripe_secret_key()
+        payload = await request.body()
+        signature = request.headers.get("stripe-signature")
+        webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
+
         if webhook_secret:
             event = stripe.Webhook.construct_event(payload, signature, webhook_secret)
         else:
-            event = stripe.Event.construct_from(await request.json(), stripe.api_key)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid Stripe webhook payload")
-    except stripe.error.SignatureVerificationError:
-        raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature")
-
-    event_type = event.get("type")
-    event_object = event.get("data", {}).get("object", {})
-
-    if event_type == "checkout.session.completed":
-        metadata = event_object.get("metadata", {}) or {}
-        user_id = metadata.get("user_id") or event_object.get("client_reference_id")
-        tier = metadata.get("tier")
-        customer_id = event_object.get("customer")
-        subscription_id = event_object.get("subscription")
-
-        if user_id and tier in PRICE_ENV_BY_TIER:
-            update_user_subscription(
-                user_id=user_id,
-                tier=tier,
-                customer_id=customer_id,
-                subscription_id=subscription_id,
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "STRIPE_WEBHOOK_SECRET is not configured"},
             )
-            return {"success": True, "handled": event_type, "user_id": user_id, "tier": tier}
 
-        return {"success": False, "handled": event_type, "message": "Missing user_id or tier metadata"}
+        event_type = event.get("type")
+        event_object = event.get("data", {}).get("object", {})
 
-    if event_type == "customer.subscription.deleted":
-        subscription_id = event_object.get("id")
-        cancel_user_subscription_access(subscription_id)
-        return {"success": True, "handled": event_type, "subscription_id": subscription_id}
+        if event_type == "checkout.session.completed":
+            metadata = event_object.get("metadata", {}) or {}
+            user_id = metadata.get("user_id") or event_object.get("client_reference_id")
+            tier = metadata.get("tier")
+            customer_id = event_object.get("customer")
+            subscription_id = event_object.get("subscription")
 
-    return {"success": True, "handled": False, "event_type": event_type}
+            if user_id and tier in PRICE_ENV_BY_TIER:
+                update_user_subscription(
+                    user_id=user_id,
+                    tier=tier,
+                    customer_id=customer_id,
+                    subscription_id=subscription_id,
+                )
+                return {"success": True, "handled": event_type, "user_id": user_id, "tier": tier}
+
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "handled": event_type, "error": "Missing user_id or tier metadata"},
+            )
+
+        if event_type == "customer.subscription.deleted":
+            subscription_id = event_object.get("id")
+            cancel_user_subscription_access(subscription_id)
+            return {"success": True, "handled": event_type, "subscription_id": subscription_id}
+
+        return {"success": True, "handled": False, "event_type": event_type}
+
+    except Exception as error:
+        print(f"❌ Stripe webhook error: {str(error)}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": f"Stripe webhook error: {str(error)}"},
+        )
