@@ -1,19 +1,15 @@
-# Copy this EXACTLY into: routes/subscriptions.py
-
-from fastapi import APIRouter, HTTPException, Depends, status, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional
 from datetime import datetime, timedelta
 import os
-from .user_management import (
-    get_current_user, get_db, UserTier, TIER_LIMITS,
-    get_user_by_id, get_user_tier_enhanced
-)
+import stripe
+
+from .user_management import get_current_user, get_db
 
 router = APIRouter()
 
-# Pydantic models
+
 class SubscriptionResponse(BaseModel):
     subscription_id: Optional[str]
     customer_id: Optional[str]
@@ -24,33 +20,109 @@ class SubscriptionResponse(BaseModel):
     amount: Optional[int]
     currency: Optional[str]
 
-# Basic subscription management routes (without real Stripe for testing)
+
+PRICE_ENV_BY_TIER = {
+    "premium": "STRIPE_PREMIUM_PRICE_ID",
+    "professional": "STRIPE_PROFESSIONAL_PRICE_ID",
+}
+
+
+def get_stripe_secret_key() -> str:
+    secret_key = os.getenv("STRIPE_SECRET_KEY", "").strip()
+    if not secret_key:
+        raise HTTPException(status_code=500, detail="Stripe secret key is not configured")
+    return secret_key
+
+
+def get_price_id_for_tier(tier: str) -> str:
+    price_env_name = PRICE_ENV_BY_TIER.get(tier)
+    if not price_env_name:
+        raise HTTPException(status_code=400, detail="Invalid subscription tier")
+
+    price_id = os.getenv(price_env_name, "").strip()
+    if not price_id:
+        raise HTTPException(status_code=500, detail=f"Stripe price ID is not configured for {tier}")
+
+    return price_id
+
+
+def update_user_stripe_customer_id(user_id: str, customer_id: str) -> None:
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE users
+            SET stripe_customer_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+            """,
+            (customer_id, user_id),
+        )
+        conn.commit()
+
+
 @router.post("/subscriptions/create-checkout")
 async def create_checkout_session(
     tier: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
 ):
-    """Create a checkout session for subscription (mock for testing)"""
-    
-    if tier not in ['premium', 'professional']:
+    """Create a real Stripe Checkout session for a paid subscription tier."""
+    tier = (tier or "").strip().lower()
+
+    if tier not in PRICE_ENV_BY_TIER:
         raise HTTPException(status_code=400, detail="Invalid subscription tier")
-    
+
     if tier == current_user.get("tier"):
         raise HTTPException(status_code=400, detail="Already subscribed to this tier")
-    
-    # Mock checkout session for testing
-    mock_checkout_url = f"https://checkout.stripe.com/mock/{tier}?user={current_user['user_id']}"
-    
-    return {
-        "checkout_url": mock_checkout_url,
-        "session_id": f"mock_session_{tier}_{current_user['user_id']}",
-        "message": f"Mock checkout for {tier} tier - this would redirect to Stripe in production"
-    }
+
+    stripe.api_key = get_stripe_secret_key()
+    price_id = get_price_id_for_tier(tier)
+    success_url = os.getenv("STRIPE_SUCCESS_URL", "https://jobreadytools.com.au/dashboard/").strip()
+    cancel_url = os.getenv("STRIPE_CANCEL_URL", "https://jobreadytools.com.au/pricing/").strip()
+
+    try:
+        session_params = {
+            "mode": "subscription",
+            "line_items": [{"price": price_id, "quantity": 1}],
+            "success_url": f"{success_url}?checkout=success&session_id={{CHECKOUT_SESSION_ID}}",
+            "cancel_url": f"{cancel_url}?checkout=cancelled",
+            "client_reference_id": current_user["user_id"],
+            "metadata": {
+                "user_id": current_user["user_id"],
+                "tier": tier,
+            },
+            "subscription_data": {
+                "metadata": {
+                    "user_id": current_user["user_id"],
+                    "tier": tier,
+                }
+            },
+            "allow_promotion_codes": True,
+        }
+
+        existing_customer_id = current_user.get("stripe_customer_id")
+        if existing_customer_id:
+            session_params["customer"] = existing_customer_id
+        else:
+            session_params["customer_email"] = current_user.get("email")
+
+        checkout_session = stripe.checkout.Session.create(**session_params)
+
+        if checkout_session.customer and not existing_customer_id:
+            update_user_stripe_customer_id(current_user["user_id"], checkout_session.customer)
+
+        return {
+            "checkout_url": checkout_session.url,
+            "session_id": checkout_session.id,
+            "tier": tier,
+        }
+
+    except stripe.error.StripeError as error:
+        raise HTTPException(status_code=502, detail=f"Stripe checkout error: {str(error)}")
+
 
 @router.get("/subscriptions/current")
 async def get_current_subscription(current_user: dict = Depends(get_current_user)):
-    """Get current user's subscription details"""
-    
+    """Get current user's subscription details."""
     try:
         subscription_data = SubscriptionResponse(
             subscription_id=current_user.get("stripe_subscription_id"),
@@ -60,11 +132,10 @@ async def get_current_subscription(current_user: dict = Depends(get_current_user
             current_period_end=datetime.now() + timedelta(days=30) if current_user["tier"] != "free" else None,
             tier=current_user["tier"],
             amount=1900 if current_user["tier"] == "premium" else 3900 if current_user["tier"] == "professional" else None,
-            currency="usd"
+            currency="usd",
         )
         return subscription_data
-        
-    except Exception as e:
+    except Exception:
         return SubscriptionResponse(
             subscription_id=None,
             customer_id=current_user.get("stripe_customer_id"),
@@ -73,88 +144,86 @@ async def get_current_subscription(current_user: dict = Depends(get_current_user
             current_period_end=None,
             tier=current_user["tier"],
             amount=None,
-            currency=None
+            currency=None,
         )
+
 
 @router.post("/subscriptions/change-tier")
 async def change_subscription_tier(
     new_tier: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
 ):
-    """Change subscription tier (mock for testing)"""
-    
-    if new_tier not in ['free', 'premium', 'professional']:
+    """Change subscription tier (mock for testing)."""
+    if new_tier not in ["free", "premium", "professional"]:
         raise HTTPException(status_code=400, detail="Invalid tier")
-    
+
     current_tier = current_user["tier"]
-    
+
     if new_tier == current_tier:
         raise HTTPException(status_code=400, detail="Already on this tier")
-    
-    # Mock tier change for testing
-    if new_tier == 'free':
+
+    if new_tier == "free":
         return {
             "message": "Subscription would be canceled (mock)",
             "tier": "free",
-            "note": "In production, this would cancel the Stripe subscription"
+            "note": "In production, this would cancel the Stripe subscription",
         }
-    elif current_tier == 'free':
+    elif current_tier == "free":
         return {
             "message": f"Would create new {new_tier} subscription (mock)",
             "tier": new_tier,
-            "note": "In production, this would create a new Stripe subscription"
+            "note": "In production, this would create a new Stripe subscription",
         }
     else:
         return {
             "message": f"Would change from {current_tier} to {new_tier} (mock)",
             "tier": new_tier,
-            "note": "In production, this would modify the existing Stripe subscription"
+            "note": "In production, this would modify the existing Stripe subscription",
         }
+
 
 @router.post("/subscriptions/cancel")
 async def cancel_user_subscription(current_user: dict = Depends(get_current_user)):
-    """Cancel current subscription (mock for testing)"""
-    
+    """Cancel current subscription (mock for testing)."""
     if current_user["tier"] == "free":
         raise HTTPException(status_code=400, detail="No active subscription to cancel")
-    
+
     return {
         "message": f"Would cancel {current_user['tier']} subscription (mock)",
         "tier": "free",
-        "note": "In production, this would cancel the Stripe subscription at period end"
+        "note": "In production, this would cancel the Stripe subscription at period end",
     }
+
 
 @router.post("/subscriptions/billing-portal")
 async def create_billing_portal_session(
     return_url: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
 ):
-    """Create billing portal session (mock for testing)"""
-    
+    """Create billing portal session (mock for testing)."""
     customer_id = current_user.get("stripe_customer_id")
     if not customer_id:
         return {
             "portal_url": f"https://billing.stripe.com/mock?return_url={return_url}",
-            "message": "Mock billing portal - would redirect to Stripe in production"
+            "message": "Mock billing portal - would redirect to Stripe in production",
         }
-    
+
     return {
         "portal_url": f"https://billing.stripe.com/mock/{customer_id}?return_url={return_url}",
-        "message": "Mock billing portal for existing customer"
+        "message": "Mock billing portal for existing customer",
     }
+
 
 @router.get("/subscriptions/invoices")
 async def get_invoices(
     current_user: dict = Depends(get_current_user),
-    limit: int = 10
+    limit: int = 10,
 ):
-    """Get user's billing invoices (mock for testing)"""
-    
+    """Get user's billing invoices (mock for testing)."""
     customer_id = current_user.get("stripe_customer_id")
     if not customer_id:
         return {"invoices": []}
-    
-    # Mock invoice data
+
     mock_invoices = [
         {
             "id": f"inv_mock_{i}",
@@ -162,26 +231,25 @@ async def get_invoices(
             "amount_due": 0,
             "currency": "usd",
             "status": "paid",
-            "created": datetime.now() - timedelta(days=30*i),
-            "period_start": datetime.now() - timedelta(days=30*(i+1)),
-            "period_end": datetime.now() - timedelta(days=30*i),
+            "created": datetime.now() - timedelta(days=30 * i),
+            "period_start": datetime.now() - timedelta(days=30 * (i + 1)),
+            "period_end": datetime.now() - timedelta(days=30 * i),
             "invoice_pdf": f"https://invoice.stripe.com/mock_{i}.pdf",
-            "hosted_invoice_url": f"https://invoice.stripe.com/mock_{i}"
+            "hosted_invoice_url": f"https://invoice.stripe.com/mock_{i}",
         }
-        for i in range(min(3, limit))  # Show last 3 mock invoices
+        for i in range(min(3, limit))
     ]
-    
+
     return {"invoices": mock_invoices}
 
-# Mock webhook endpoint
+
 @router.post("/subscriptions/webhook")
 async def handle_stripe_webhook(request: Request):
-    """Handle Stripe webhook events (mock for testing)"""
-    
+    """Handle Stripe webhook events (mock for testing)."""
     payload = await request.body()
-    
+
     return {
         "status": "success",
         "message": "Mock webhook handler - would process real Stripe events in production",
-        "payload_size": len(payload)
+        "payload_size": len(payload),
     }
