@@ -908,6 +908,7 @@ function initialiseHireReadyDashboard() {
       <div class="dashboard-actions">
         <a href="/create-resume/" class="resume-btn">Create Resume</a>
         <a href="/premium-resume-analysis/" class="resume-btn">Resume Analysis</a>
+        <a href="/forgot-password/" class="resume-btn">Change Password</a>
       </div>
 
       <h2>My Resumes</h2>
