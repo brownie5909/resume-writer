@@ -20,6 +20,7 @@ from app.services.resume_document_service import (
 )
 from app.services.resume_generator import generate_resume_with_ai
 from routes.account_recovery import router as account_recovery_router
+from routes.account_settings import router as account_settings_router
 from routes.admin import router as admin_router
 from routes.cover_letter import router as cover_letter_router
 from routes.cover_letter_generator import router as cover_letter_generator_router
@@ -109,6 +110,7 @@ class ResumeRequest(BaseModel):
 
 app.include_router(user_management_router, prefix="/api", tags=["Authentication & Users"])
 app.include_router(account_recovery_router, prefix="/api", tags=["Account Recovery"])
+app.include_router(account_settings_router, prefix="/api", tags=["Account Settings"])
 app.include_router(admin_router, prefix="/api", tags=["Admin Management"])
 app.include_router(subscriptions_router, prefix="/api", tags=["Subscription Management"])
 app.include_router(interview_router, prefix="/api", tags=["Interview"])
