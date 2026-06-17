@@ -104,6 +104,8 @@ console.log('Hire Ready interview-preparation.js loaded');
     results.innerHTML = `
       <div class="ip-card">
         <h2>Your Interview Preparation Report</h2>
+        ${sectionHtml('Company Snapshot', prep.company_snapshot)}
+        ${sectionHtml('Company Interview Themes', prep.company_interview_themes)}
         ${sectionHtml('Likely Interview Questions', prep.likely_questions)}
         ${sectionHtml('Key Skills Being Assessed', prep.key_skills)}
         ${sectionHtml('What The Employer Is Looking For', prep.employer_priorities)}
@@ -161,7 +163,7 @@ console.log('Hire Ready interview-preparation.js loaded');
     }
 
     setLoading(true);
-    setStatus('Generating your interview preparation report...', '');
+    setStatus('Generating your company-focused interview preparation report...', '');
 
     try {
       const response = await hireReadyFetch(`${API_BASE}/api/interview-preparation/generate`, {
@@ -178,7 +180,7 @@ console.log('Hire Ready interview-preparation.js loaded');
         return;
       }
 
-      setStatus('Interview preparation report generated and saved successfully.', 'success');
+      setStatus('Company-focused interview preparation report generated and saved successfully.', 'success');
       renderResults(data);
     } catch (error) {
       console.error('Interview preparation error:', error);
