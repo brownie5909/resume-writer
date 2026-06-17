@@ -46,6 +46,18 @@ def fallback_interview_preparation(role_title: str, company_name: Optional[str],
     company = company_name or "the employer"
     role = role_title or "this role"
     return {
+        "company_snapshot": [
+            f"Review {company}'s website, values, services and recent updates before the interview.",
+            f"Connect your answers to how the {role} role supports {company}'s customers, team or business goals.",
+            "Look for clues in the job advertisement about the organisation's priorities, culture and expectations.",
+            "Prepare a short explanation of why this organisation interests you, not just why you want the job."
+        ],
+        "company_interview_themes": [
+            f"Why do you want to work with {company}?",
+            f"What do you understand about {company} and the work they do?",
+            f"How would your experience help you contribute to {company} in the {role} role?",
+            "What have you learned from researching the organisation?"
+        ],
         "likely_questions": [
             f"Tell me about your experience relevant to the {role} role.",
             f"Why are you interested in working with {company}?",
@@ -108,7 +120,9 @@ Job Advertisement / Role Description:
 
 Return ONLY valid JSON in this exact structure:
 {{
-  "likely_questions": ["10 likely interview questions tailored to the role"],
+  "company_snapshot": ["4 concise points about the company context, likely priorities, values, customers/stakeholders, or what the candidate should research"],
+  "company_interview_themes": ["company-specific interview themes and questions the candidate should prepare for"],
+  "likely_questions": ["10 likely interview questions tailored to the role and company"],
   "key_skills": ["skills the interview is likely to assess"],
   "employer_priorities": ["what the employer is likely looking for"],
   "red_flags": ["common mistakes or concerns to avoid"],
@@ -116,7 +130,7 @@ Return ONLY valid JSON in this exact structure:
   "preparation_tips": ["practical preparation tips"]
 }}
 
-Be specific to the role and job advertisement. Keep each item clear and useful.
+Be specific to the role, company name, and job advertisement. If limited company information is provided, infer carefully from the company name, role and job advertisement without inventing unverifiable facts. Keep each item clear and useful.
 """
 
     try:
@@ -132,7 +146,7 @@ Be specific to the role and job advertisement. Keep each item clear and useful.
                     {"role": "user", "content": prompt}
                 ],
                 "temperature": 0.4,
-                "max_tokens": 2200
+                "max_tokens": 2600
             }
             async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=45) as response:
                 if response.status != 200:
@@ -140,7 +154,16 @@ Be specific to the role and job advertisement. Keep each item clear and useful.
                 result = await response.json()
                 content = result["choices"][0]["message"]["content"].strip()
                 parsed = json.loads(extract_json_content(content))
-                required = ["likely_questions", "key_skills", "employer_priorities", "red_flags", "questions_to_ask", "preparation_tips"]
+                required = [
+                    "company_snapshot",
+                    "company_interview_themes",
+                    "likely_questions",
+                    "key_skills",
+                    "employer_priorities",
+                    "red_flags",
+                    "questions_to_ask",
+                    "preparation_tips"
+                ]
                 if not all(key in parsed for key in required):
                     return fallback_interview_preparation(role_title, company_name, job_posting)
                 return parsed
