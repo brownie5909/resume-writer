@@ -1,0 +1,237 @@
+/* Hire Ready Account Page */
+
+.hr-account-wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 32px 16px 56px;
+  color: #101828;
+  font-family: inherit;
+}
+
+.hr-account-hero {
+  border: 1px solid #d9eaff;
+  border-radius: 18px;
+  padding: 26px;
+  background: linear-gradient(135deg, #eff8ff, #ffffff);
+  margin-bottom: 22px;
+}
+
+.hr-account-hero h1 {
+  margin: 0 0 8px;
+  font-size: clamp(30px, 4vw, 44px);
+  line-height: 1.1;
+  color: #101828;
+}
+
+.hr-account-hero p {
+  margin: 0;
+  color: #475467;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.hr-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.hr-account-card {
+  background: #ffffff;
+  border: 1px solid #e4e7ec;
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.hr-account-card h2 {
+  margin: 0 0 14px;
+  color: #101828;
+  font-size: 24px;
+}
+
+.hr-account-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f2f4f7;
+}
+
+.hr-account-row:last-child {
+  border-bottom: none;
+}
+
+.hr-account-label {
+  color: #667085;
+  font-weight: 700;
+}
+
+.hr-account-value {
+  color: #101828;
+  font-weight: 800;
+  text-align: right;
+  word-break: break-word;
+}
+
+.hr-account-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #eff8ff;
+  color: #175cd3;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.hr-account-pill.basic,
+.hr-account-pill.free {
+  background: #f2f4f7;
+  color: #344054;
+}
+
+.hr-account-pill.premium {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.hr-account-pill.professional {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.hr-account-status {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f2f4f7;
+  color: #344054;
+  font-weight: 700;
+}
+
+.hr-account-status:empty {
+  display: none;
+}
+
+.hr-account-status.success {
+  background: #ecfdf3;
+  color: #027a48;
+  border: 1px solid #abefc6;
+}
+
+.hr-account-status.error {
+  background: #fef3f2;
+  color: #b42318;
+  border: 1px solid #fecdca;
+}
+
+.hr-account-form label {
+  display: block;
+  margin: 14px 0 6px;
+  font-weight: 800;
+  color: #344054;
+}
+
+.hr-account-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #ffffff;
+}
+
+.hr-account-input:focus {
+  outline: none;
+  border-color: #1e73be;
+  box-shadow: 0 0 0 3px rgba(30, 115, 190, 0.15);
+}
+
+.hr-account-help {
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 14px;
+}
+
+.hr-account-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.hr-account-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: #1e73be;
+  color: #ffffff !important;
+  border: 1px solid #1e73be;
+  font-weight: 900;
+  text-decoration: none !important;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.hr-account-btn:hover {
+  background: #155a94;
+  transform: translateY(-1px);
+}
+
+.hr-account-btn.secondary {
+  background: #ffffff;
+  color: #344054 !important;
+  border-color: #d0d5dd;
+}
+
+.hr-account-btn.secondary:hover {
+  background: #f9fafb;
+}
+
+.hr-account-btn:disabled,
+.hr-account-btn.loading {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.hr-account-note {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  color: #93370d;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .hr-account-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hr-account-row {
+    display: block;
+  }
+
+  .hr-account-value {
+    display: block;
+    margin-top: 4px;
+    text-align: left;
+  }
+
+  .hr-account-actions {
+    display: grid;
+  }
+
+  .hr-account-btn {
+    width: 100%;
+  }
+}
