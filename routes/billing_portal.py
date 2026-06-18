@@ -34,6 +34,14 @@ def timestamp_to_iso(value):
         return None
 
 
+def get_subscription_item(subscription):
+    items = stripe_value(subscription, "items", {}) or {}
+    data = stripe_value(items, "data", []) or []
+    if isinstance(data, list) and data:
+        return data[0]
+    return None
+
+
 @router.get("/subscriptions/live-status")
 async def get_live_subscription_status(current_user: dict = Depends(get_current_user)):
     """Return live Stripe subscription status for the current user when available."""
@@ -58,10 +66,21 @@ async def get_live_subscription_status(current_user: dict = Depends(get_current_
 
     try:
         subscription = stripe.Subscription.retrieve(subscription_id)
+        subscription_item = get_subscription_item(subscription)
         status = stripe_value(subscription, "status", "unknown")
         cancel_at_period_end = bool(stripe_value(subscription, "cancel_at_period_end", False))
-        current_period_end = timestamp_to_iso(stripe_value(subscription, "current_period_end"))
-        current_period_start = timestamp_to_iso(stripe_value(subscription, "current_period_start"))
+
+        period_end_raw = stripe_value(subscription, "current_period_end")
+        period_start_raw = stripe_value(subscription, "current_period_start")
+
+        if not period_end_raw and subscription_item:
+            period_end_raw = stripe_value(subscription_item, "current_period_end")
+
+        if not period_start_raw and subscription_item:
+            period_start_raw = stripe_value(subscription_item, "current_period_start")
+
+        current_period_end = timestamp_to_iso(period_end_raw)
+        current_period_start = timestamp_to_iso(period_start_raw)
 
         return {
             "success": True,
