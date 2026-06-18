@@ -17,7 +17,7 @@ console.log("Hire Ready create-resume.js loaded");
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
+      .replace(/\"/g, "&quot;")
       .replace(/'/g, "&#039;");
   }
 
@@ -358,9 +358,9 @@ console.log("Hire Ready create-resume.js loaded");
     const authenticated = isAuthenticated();
     const saveMessage = authenticated
       ? response.save_action === "updated_existing"
-        ? "Your existing saved resume was replaced. Previous version kept as backup."
-        : "Saved to your account."
-      : "Sign in to save and download your resume.";
+        ? "Your existing saved resume was replaced and the previous version was kept as a backup. You can download the PDF from your dashboard."
+        : "Your resume has been saved to your dashboard. You can download the PDF from there."
+      : "Your resume preview is ready. Sign in to save resumes and download PDFs.";
 
     resultsContainer.innerHTML = `
       <div class="hr-resume-results-card">
@@ -380,54 +380,16 @@ console.log("Hire Ready create-resume.js loaded");
         ` : ""}
 
         <div class="hr-resume-actions" style="margin-top: 18px;">
-          ${response.pdf_url ? `<button type="button" class="hr-resume-btn success" data-pdf-url="${escapeHtml(response.pdf_url)}" id="download-pdf-btn">Download PDF</button>` : ""}
-          ${authenticated ? `<a href="/dashboard/" class="hr-resume-btn secondary">View Dashboard</a>` : `<a href="/login/" class="hr-resume-btn secondary">Sign In To Save</a>`}
+          ${authenticated ? `<a href="/dashboard/" class="hr-resume-btn success">View Dashboard & Download PDF</a>` : `<a href="/login/" class="hr-resume-btn success">Sign In To Save</a>`}
           <button type="button" class="hr-resume-btn secondary" id="generate-another-btn">Generate Another</button>
         </div>
       </div>
     `;
 
     resultsContainer.classList.add("active");
-
-    document.getElementById("download-pdf-btn")?.addEventListener("click", function () {
-      downloadPDF(this.dataset.pdfUrl);
-    });
-
     document.getElementById("generate-another-btn")?.addEventListener("click", generateAnother);
-
     resultsContainer.scrollIntoView({ behavior: "smooth", block: "start" });
   }
-
-  window.downloadPDF = async function (pdfUrl) {
-    try {
-      const token = getToken();
-      if (!token) {
-        alert("Please sign in to download PDFs");
-        window.location.href = "/login/";
-        return;
-      }
-
-      const pdfId = pdfUrl.split("/").pop();
-      const response = await fetch(`${API_BASE}/api/download-resume/${pdfId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (!response.ok) throw new Error("Download failed - " + response.status);
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "resume.pdf";
-      document.body.appendChild(link);
-      link.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error("Download error", error);
-      alert("Download failed: " + error.message);
-    }
-  };
 
   function showError(message) {
     const resultsContainer = document.getElementById("results-container");
