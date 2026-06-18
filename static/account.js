@@ -52,11 +52,76 @@ console.log("Hire Ready account.js loaded");
     }
   }
 
-  function renderAccount(user) {
+  function formatDate(value) {
+    if (!value) return "Not available";
+
+    try {
+      return new Intl.DateTimeFormat("en-AU", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      }).format(new Date(value));
+    } catch (error) {
+      return "Not available";
+    }
+  }
+
+  function formatSubscriptionStatus(subscription, hasPaidPlan) {
+    if (!hasPaidPlan) return "Basic";
+
+    if (subscription && subscription.cancel_at_period_end) {
+      return "Cancels At Period End";
+    }
+
+    if (subscription && subscription.status) {
+      return (
+        subscription.status.charAt(0).toUpperCase() +
+        subscription.status.slice(1)
+      );
+    }
+
+    return "Active";
+  }
+
+  function subscriptionDateLabel(subscription) {
+    if (!subscription) return null;
+
+    const dateValue =
+      subscription.access_until ||
+      subscription.current_period_end;
+
+    if (!dateValue) return null;
+
+    return subscription.cancel_at_period_end
+      ? "Access Until"
+      : "Renews On";
+  }
+
+  function subscriptionDateValue(subscription) {
+    if (!subscription) return "Not available";
+
+    return formatDate(
+      subscription.access_until ||
+      subscription.current_period_end
+    );
+  }
+
+  function renderAccount(user, subscription = null) {
     const mount = document.getElementById("hire-ready-account");
 
     const tier = user.tier || "basic";
     const hasPaidPlan = tier !== "basic" && tier !== "free";
+
+    const statusText =
+      formatSubscriptionStatus(subscription, hasPaidPlan);
+
+    const dateLabel =
+      hasPaidPlan ? subscriptionDateLabel(subscription) : null;
+
+    const dateValue =
+      hasPaidPlan && dateLabel
+        ? subscriptionDateValue(subscription)
+        : null;
 
     mount.innerHTML = `
       <section class="hr-account-wrap">
@@ -152,17 +217,35 @@ console.log("Hire Ready account.js loaded");
               </span>
             </div>
 
+            ${hasPaidPlan ? `
+              <div class="hr-account-row">
+                <span class="hr-account-label">Status</span>
+                <span class="hr-account-value">${escapeHtml(statusText)}</span>
+              </div>
+            ` : ""}
+
+            ${hasPaidPlan && dateLabel ? `
+              <div class="hr-account-row">
+                <span class="hr-account-label">${escapeHtml(dateLabel)}</span>
+                <span class="hr-account-value">${escapeHtml(dateValue)}</span>
+              </div>
+            ` : ""}
+
             <div class="hr-account-note">
-              ${hasPaidPlan
-                ? "Manage your subscription, payment method, invoices and cancellation through Stripe."
-                : "You are currently on the Basic plan. Upgrade when you need more resumes, analysis, cover letter tools and interview preparation."
+              ${
+                hasPaidPlan
+                  ? subscription && subscription.cancel_at_period_end
+                    ? "Your paid access remains active until the end of the current billing period. Manage billing or reactivate through Stripe."
+                    : "Manage your subscription, payment method, invoices and cancellation through Stripe."
+                  : "You are currently on the Basic plan. Upgrade when you need more resumes, analysis, cover letter tools and interview preparation."
               }
             </div>
 
             <div class="hr-account-actions">
-              ${hasPaidPlan
-                ? `<button id="hr-manage-billing-btn" class="hr-account-btn" type="button">Manage Billing</button>`
-                : `<a href="/pricing/" class="hr-account-btn">Upgrade Plan</a>`
+              ${
+                hasPaidPlan
+                  ? `<button id="hr-manage-billing-btn" class="hr-account-btn" type="button">Manage Billing</button>`
+                  : `<a href="/pricing/" class="hr-account-btn">Upgrade Plan</a>`
               }
             </div>
 
@@ -186,6 +269,7 @@ console.log("Hire Ready account.js loaded");
 
   async function openBillingPortal(event) {
     const button = event.currentTarget;
+
     setButtonLoading(button, true, "Opening Billing...");
     setStatus("Opening Stripe billing portal...", "");
 
@@ -201,7 +285,9 @@ console.log("Hire Ready account.js loaded");
 
       if (!response.ok || !result.portal_url) {
         setStatus(
-          result.detail || result.error || "Unable to open billing portal.",
+          result.detail ||
+            result.error ||
+            "Unable to open billing portal.",
           "error"
         );
         return;
@@ -210,7 +296,6 @@ console.log("Hire Ready account.js loaded");
       window.location.href = result.portal_url;
 
     } catch (error) {
-
       console.error(error);
 
       setStatus(
@@ -223,7 +308,6 @@ console.log("Hire Ready account.js loaded");
   }
 
   async function changePassword() {
-
     const currentPassword =
       document.getElementById("hr-current-password").value;
 
@@ -244,7 +328,6 @@ console.log("Hire Ready account.js loaded");
     }
 
     try {
-
       const response = await accountFetch(
         "/api/auth/change-password",
         {
@@ -282,7 +365,6 @@ console.log("Hire Ready account.js loaded");
       }, 1500);
 
     } catch (error) {
-
       console.error(error);
 
       setStatus(
@@ -293,7 +375,6 @@ console.log("Hire Ready account.js loaded");
   }
 
   async function loadAccount() {
-
     const mount =
       document.getElementById("hire-ready-account");
 
@@ -315,7 +396,6 @@ console.log("Hire Ready account.js loaded");
     `;
 
     try {
-
       const response =
         await accountFetch("/api/auth/me");
 
@@ -326,10 +406,24 @@ console.log("Hire Ready account.js loaded");
         throw new Error("Authentication required");
       }
 
-      renderAccount(user);
+      let subscription = null;
+
+      try {
+        const subscriptionResponse =
+          await accountFetch("/api/subscriptions/live-status");
+
+        subscription =
+          await subscriptionResponse.json();
+      } catch (subscriptionError) {
+        console.warn(
+          "Unable to load live subscription status",
+          subscriptionError
+        );
+      }
+
+      renderAccount(user, subscription);
 
     } catch (error) {
-
       console.error(error);
 
       mount.innerHTML = `
