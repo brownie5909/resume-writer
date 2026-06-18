@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,6 +23,70 @@ def get_stripe_secret_key() -> str:
     if not secret_key:
         raise HTTPException(status_code=500, detail="Stripe secret key is not configured")
     return secret_key
+
+
+def timestamp_to_iso(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromtimestamp(int(value), tz=timezone.utc).isoformat()
+    except Exception:
+        return None
+
+
+@router.get("/subscriptions/live-status")
+async def get_live_subscription_status(current_user: dict = Depends(get_current_user)):
+    """Return live Stripe subscription status for the current user when available."""
+    subscription_id = current_user.get("stripe_subscription_id")
+    customer_id = current_user.get("stripe_customer_id")
+    tier = current_user.get("tier", "basic")
+
+    if not subscription_id:
+        return {
+            "success": True,
+            "tier": tier,
+            "customer_id": customer_id,
+            "subscription_id": None,
+            "status": "inactive" if tier in ("basic", "free") else "unknown",
+            "cancel_at_period_end": False,
+            "current_period_end": None,
+            "current_period_start": None,
+            "access_until": None,
+        }
+
+    stripe.api_key = get_stripe_secret_key()
+
+    try:
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        status = stripe_value(subscription, "status", "unknown")
+        cancel_at_period_end = bool(stripe_value(subscription, "cancel_at_period_end", False))
+        current_period_end = timestamp_to_iso(stripe_value(subscription, "current_period_end"))
+        current_period_start = timestamp_to_iso(stripe_value(subscription, "current_period_start"))
+
+        return {
+            "success": True,
+            "tier": tier,
+            "customer_id": customer_id,
+            "subscription_id": subscription_id,
+            "status": status,
+            "cancel_at_period_end": cancel_at_period_end,
+            "current_period_end": current_period_end,
+            "current_period_start": current_period_start,
+            "access_until": current_period_end,
+        }
+    except Exception as error:
+        return {
+            "success": False,
+            "tier": tier,
+            "customer_id": customer_id,
+            "subscription_id": subscription_id,
+            "status": "unknown",
+            "cancel_at_period_end": False,
+            "current_period_end": None,
+            "current_period_start": None,
+            "access_until": None,
+            "error": str(error),
+        }
 
 
 @router.post("/subscriptions/customer-portal")
