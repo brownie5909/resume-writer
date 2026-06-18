@@ -37,17 +37,33 @@ console.log("Hire Ready account.js loaded");
     status.textContent = message;
   }
 
+  function setButtonLoading(button, isLoading, loadingText) {
+    if (!button) return;
+
+    if (isLoading) {
+      button.dataset.originalText = button.textContent;
+      button.disabled = true;
+      button.classList.add("loading");
+      button.textContent = loadingText || "Opening...";
+    } else {
+      button.disabled = false;
+      button.classList.remove("loading");
+      button.textContent = button.dataset.originalText || button.textContent;
+    }
+  }
+
   function renderAccount(user) {
     const mount = document.getElementById("hire-ready-account");
 
     const tier = user.tier || "basic";
+    const hasPaidPlan = tier !== "basic" && tier !== "free";
 
     mount.innerHTML = `
       <section class="hr-account-wrap">
 
         <div class="hr-account-hero">
           <h1>Account Settings</h1>
-          <p>Manage your account information and security settings.</p>
+          <p>Manage your account information, security settings and subscription.</p>
         </div>
 
         <div class="hr-account-grid">
@@ -68,7 +84,7 @@ console.log("Hire Ready account.js loaded");
             <div class="hr-account-row">
               <span class="hr-account-label">Plan</span>
               <span class="hr-account-value">
-                <span class="hr-account-pill ${tier}">
+                <span class="hr-account-pill ${escapeHtml(tier)}">
                   ${escapeHtml(tier)}
                 </span>
               </span>
@@ -137,14 +153,17 @@ console.log("Hire Ready account.js loaded");
             </div>
 
             <div class="hr-account-note">
-              Subscription management and billing portal integration
-              will be added in the next release.
+              ${hasPaidPlan
+                ? "Manage your subscription, payment method, invoices and cancellation through Stripe."
+                : "You are currently on the Basic plan. Upgrade when you need more resumes, analysis, cover letter tools and interview preparation."
+              }
             </div>
 
             <div class="hr-account-actions">
-              <a href="/pricing/" class="hr-account-btn">
-                Upgrade Plan
-              </a>
+              ${hasPaidPlan
+                ? `<button id="hr-manage-billing-btn" class="hr-account-btn" type="button">Manage Billing</button>`
+                : `<a href="/pricing/" class="hr-account-btn">Upgrade Plan</a>`
+              }
             </div>
 
           </div>
@@ -159,6 +178,48 @@ console.log("Hire Ready account.js loaded");
     document
       .getElementById("hr-change-password-btn")
       .addEventListener("click", changePassword);
+
+    document
+      .getElementById("hr-manage-billing-btn")
+      ?.addEventListener("click", openBillingPortal);
+  }
+
+  async function openBillingPortal(event) {
+    const button = event.currentTarget;
+    setButtonLoading(button, true, "Opening Billing...");
+    setStatus("Opening Stripe billing portal...", "");
+
+    try {
+      const response = await accountFetch(
+        "/api/subscriptions/customer-portal?return_url=https%3A%2F%2Fjobreadytools.com.au%2Faccount%2F",
+        {
+          method: "POST"
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.portal_url) {
+        setStatus(
+          result.detail || result.error || "Unable to open billing portal.",
+          "error"
+        );
+        return;
+      }
+
+      window.location.href = result.portal_url;
+
+    } catch (error) {
+
+      console.error(error);
+
+      setStatus(
+        "Unable to open billing portal.",
+        "error"
+      );
+    } finally {
+      setButtonLoading(button, false);
+    }
   }
 
   async function changePassword() {
