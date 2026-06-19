@@ -121,7 +121,8 @@ console.log("Hire Ready create-resume.js loaded");
             </section>
 
             <section class="hr-resume-section">
-              <h3>Options</h3>
+              <h3>Resume Style</h3>
+              <p class="hr-resume-section-note">Choose the tone of the resume. All styles remain clean and ATS-friendly.</p>
               <div class="hr-field-grid">
                 <div class="hr-field">
                   <label for="template_choice">Resume Style</label>
@@ -130,13 +131,6 @@ console.log("Hire Ready create-resume.js loaded");
                     <option value="conservative">Conservative</option>
                     <option value="creative">Creative</option>
                     <option value="executive">Executive</option>
-                  </select>
-                </div>
-                <div class="hr-field">
-                  <label for="generate_cover_letter">Cover Letter</label>
-                  <select id="generate_cover_letter" name="generate_cover_letter">
-                    <option value="false">Resume only</option>
-                    <option value="true">Generate resume and cover letter</option>
                   </select>
                 </div>
               </div>
@@ -219,17 +213,13 @@ console.log("Hire Ready create-resume.js loaded");
         const data = {};
 
         for (const [key, value] of formData.entries()) {
-          if (key === "generate_cover_letter") {
-            data[key] = value === "true";
-          } else {
-            data[key] = value;
-          }
+          data[key] = value;
         }
 
         const requestData = {
           data,
           template_choice: data.template_choice || "default",
-          generate_cover_letter: Boolean(data.generate_cover_letter)
+          generate_cover_letter: false
         };
 
         let response;
@@ -379,8 +369,13 @@ console.log("Hire Ready create-resume.js loaded");
           </div>
         ` : ""}
 
+        <div class="hr-resume-ats-note">
+          <strong>Need a cover letter?</strong> Use the Cover Letter Generator to create a tailored cover letter for a specific role or job advertisement.
+        </div>
+
         <div class="hr-resume-actions" style="margin-top: 18px;">
           ${authenticated ? `<a href="/dashboard/" class="hr-resume-btn success">View Dashboard & Download PDF</a>` : `<a href="/login/" class="hr-resume-btn success">Sign In To Save</a>`}
+          <a href="/cover-letter-generator/" class="hr-resume-btn secondary">Create Cover Letter</a>
           <button type="button" class="hr-resume-btn secondary" id="generate-another-btn">Generate Another</button>
         </div>
       </div>
