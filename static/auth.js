@@ -84,6 +84,7 @@ async function hireReadySubmitRegister(event) {
   const email = document.getElementById("hire-ready-register-email").value.trim();
   const password = document.getElementById("hire-ready-register-password").value;
   const confirmPassword = document.getElementById("hire-ready-register-confirm-password").value;
+  const termsAgree = document.getElementById("hire-ready-terms-agree");
 
   if (!fullName || !email || !password || !confirmPassword) {
     hireReadySetStatus("Please complete all fields.", "error");
@@ -97,6 +98,11 @@ async function hireReadySubmitRegister(event) {
 
   if (password.length < 8) {
     hireReadySetStatus("Password must be at least 8 characters.", "error");
+    return;
+  }
+
+  if (!termsAgree || !termsAgree.checked) {
+    hireReadySetStatus("Please agree to the Terms & Conditions and Privacy Policy before creating your account.", "error");
     return;
   }
 
@@ -179,6 +185,16 @@ function hireReadyRenderRegister(container) {
 
           <label class="hire-ready-auth-label" for="hire-ready-register-confirm-password">Confirm Password</label>
           <input id="hire-ready-register-confirm-password" class="hire-ready-auth-input" type="password" autocomplete="new-password" required>
+
+          <label class="hire-ready-auth-terms" for="hire-ready-terms-agree">
+            <input id="hire-ready-terms-agree" type="checkbox" required>
+            <span>
+              I agree to the
+              <a href="/terms-and-conditions/" target="_blank" rel="noopener">Terms & Conditions</a>
+              and
+              <a href="/privacy-policy/" target="_blank" rel="noopener">Privacy Policy</a>.
+            </span>
+          </label>
 
           <button class="hire-ready-auth-btn" type="submit">Create Account</button>
         </form>
