@@ -9,6 +9,24 @@ from openai import OpenAI
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
+HIRE_READY_RESUME_STANDARD = """
+Hire Ready Resume Standard:
+- Use a clean, text-based, single-column resume structure.
+- Use standard section headings such as Professional Summary, Key Skills, Professional Experience, Education, Certifications and Referees.
+- Bullet points are recommended for Professional Experience sections.
+- Use 3 to 5 concise bullet points per recent role where enough detail exists.
+- Do not recommend removing bullet points from experience sections unless they are excessive, unclear, duplicated or poorly formatted.
+- Avoid dense paragraphs in Professional Experience.
+- A short 3 to 5 line Professional Summary is acceptable.
+- Key Skills should be a concise keyword-rich list, not a long paragraph.
+- Prefer measurable achievements where supported by the resume text.
+- Do not invent employers, dates, qualifications, certifications, systems, metrics or achievements.
+- Missing keywords should be relevant to the target role and should be incorporated naturally where truthful.
+- The improved resume should directly address the listed weaknesses, missing keywords and ATS recommendations.
+- The improved resume should normally maintain or improve ATS readability compared with the original resume.
+"""
+
+
 def _clamp_score(value: Any, default: int = 70) -> int:
     """Return a safe integer score between 0 and 100."""
     try:
@@ -91,13 +109,15 @@ def _call_openai(prompt: str) -> str:
                 "role": "system",
                 "content": (
                     "You are an expert Australian resume reviewer, ATS specialist, "
-                    "and career coach. Return valid JSON only. Do not invent facts "
-                    "that are not supported by the resume text."
+                    "and career coach. Return valid JSON only. Apply the Hire Ready "
+                    "Resume Standard consistently on every analysis. Do not invent facts "
+                    "that are not supported by the resume text. Do not give contradictory "
+                    "formatting advice across analyses."
                 ),
             },
             {"role": "user", "content": prompt},
         ],
-        temperature=0.2,
+        temperature=0.1,
         response_format={"type": "json_object"},
     )
     return response.choices[0].message.content or "{}"
@@ -118,15 +138,24 @@ async def analyze_resume_with_ai(resume_text: str, target_role: Optional[str] = 
 You are an expert ATS resume reviewer and career coach.
 
 Analyse the resume below for Applicant Tracking System compatibility and hiring-manager quality.
-Use practical ATS rules: clear text-based formatting, standard section headings, natural keyword matching, measurable achievements, and role-specific tailoring.
+Use the Hire Ready Resume Standard below as the fixed evaluation standard for every analysis.
+Do not change the standard between analyses.
+
+{HIRE_READY_RESUME_STANDARD}
 
 Important rules:
 - Return ONLY valid JSON.
 - Do not include markdown fences.
 - Scores must be integers from 0 to 100.
 - Be specific and practical.
-- Do not invent employers, qualifications, dates, certifications, or achievements not supported by the resume.
+- Keep feedback consistent with the Hire Ready Resume Standard.
+- Do not recommend removing bullet points from Professional Experience if the issue is that the resume needs clearer achievement-focused bullet points.
+- Do not invent employers, qualifications, dates, certifications, systems, software, metrics, responsibilities, or achievements not supported by the resume.
 - If the resume lacks detail, improve wording but keep the candidate's background truthful.
+- If you list a missing keyword, include it naturally in the improved_resume where it is truthful and relevant.
+- The improved_resume must address the weaknesses, keyword gaps, section feedback and ATS recommendations you provide.
+- The improved_resume should be at least as ATS-friendly as the original resume and should not intentionally reduce formatting quality.
+- If the original resume is already strong, make careful refinements rather than unnecessary rewrites.
 
 Resume:
 {cleaned_resume_text}
