@@ -52,10 +52,60 @@ def _as_dict(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _normalise_analysis(raw: Dict[str, Any]) -> Dict[str, Any]:
+def _keyword_exists_in_resume(keyword: str, resume_text: str) -> bool:
+    """Return true when a keyword or close phrase already appears in the resume."""
+    if not keyword or not resume_text:
+        return False
+
+    normalised_resume = re.sub(r"\s+", " ", resume_text.lower())
+    normalised_keyword = re.sub(r"\s+", " ", keyword.lower()).strip()
+
+    if not normalised_keyword:
+        return False
+
+    if normalised_keyword in normalised_resume:
+        return True
+
+    keyword_words = [word for word in re.split(r"[^a-z0-9]+", normalised_keyword) if word]
+    if len(keyword_words) > 1:
+        return all(re.search(rf"\b{re.escape(word)}\b", normalised_resume) for word in keyword_words)
+
+    return bool(re.search(rf"\b{re.escape(normalised_keyword)}\b", normalised_resume))
+
+
+def _dedupe_case_insensitive(items: List[str]) -> List[str]:
+    seen = set()
+    output = []
+
+    for item in items:
+        key = item.lower().strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        output.append(item)
+
+    return output
+
+
+def _normalise_analysis(raw: Dict[str, Any], resume_text: str = "") -> Dict[str, Any]:
     """Ensure the API always returns the same safe JSON shape to the frontend."""
     keyword_analysis = _as_dict(raw.get("keyword_analysis"))
     sections_analysis = _as_dict(raw.get("sections_analysis"))
+
+    missing_keywords = _dedupe_case_insensitive(_as_list(keyword_analysis.get("missing_keywords")))
+    present_keywords = _dedupe_case_insensitive(_as_list(keyword_analysis.get("present_keywords")))
+
+    verified_missing_keywords = [
+        keyword for keyword in missing_keywords
+        if not _keyword_exists_in_resume(keyword, resume_text)
+    ]
+
+    verified_present_keywords = _dedupe_case_insensitive(
+        present_keywords + [
+            keyword for keyword in missing_keywords
+            if _keyword_exists_in_resume(keyword, resume_text)
+        ]
+    )
 
     def section(name: str) -> Dict[str, Any]:
         section_data = _as_dict(sections_analysis.get(name))
@@ -75,8 +125,8 @@ def _normalise_analysis(raw: Dict[str, Any]) -> Dict[str, Any]:
         "strengths": _as_list(raw.get("strengths")),
         "weaknesses": _as_list(raw.get("weaknesses")),
         "keyword_analysis": {
-            "missing_keywords": _as_list(keyword_analysis.get("missing_keywords")),
-            "present_keywords": _as_list(keyword_analysis.get("present_keywords")),
+            "missing_keywords": verified_missing_keywords,
+            "present_keywords": verified_present_keywords,
             "keyword_density": _clamp_score(keyword_analysis.get("keyword_density"), 0),
         },
         "sections_analysis": {
@@ -112,7 +162,8 @@ def _call_openai(prompt: str) -> str:
                     "and career coach. Return valid JSON only. Apply the Hire Ready "
                     "Resume Standard consistently on every analysis. Do not invent facts "
                     "that are not supported by the resume text. Do not give contradictory "
-                    "formatting advice across analyses."
+                    "formatting advice across analyses. Do not list a keyword as missing "
+                    "if it already appears anywhere in the resume text."
                 ),
             },
             {"role": "user", "content": prompt},
@@ -149,6 +200,9 @@ Important rules:
 - Scores must be integers from 0 to 100.
 - Be specific and practical.
 - Keep feedback consistent with the Hire Ready Resume Standard.
+- Carefully check the full resume text before listing missing keywords.
+- Do not list a keyword as missing if it already appears anywhere in the resume, even once.
+- If a keyword appears in the resume but could be used more strongly, list that as an ATS recommendation instead of a missing keyword.
 - Do not recommend removing bullet points from Professional Experience if the issue is that the resume needs clearer achievement-focused bullet points.
 - Do not invent employers, qualifications, dates, certifications, systems, software, metrics, responsibilities, or achievements not supported by the resume.
 - If the resume lacks detail, improve wording but keep the candidate's background truthful.
@@ -199,6 +253,6 @@ Return JSON in this EXACT format:
 
     try:
         raw_result = _extract_json_object(content)
-        return _normalise_analysis(raw_result)
+        return _normalise_analysis(raw_result, cleaned_resume_text)
     except Exception as exc:
         raise Exception(f"AI returned invalid analysis JSON: {str(exc)}")
