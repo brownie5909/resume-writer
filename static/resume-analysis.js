@@ -125,9 +125,15 @@ function renderAnalysisResults(result) {
   if (!output) return;
 
   const analysis = result.analysis || {};
+  const savedTitle = result.saved_resume?.title || "Analysed resume";
 
   output.innerHTML = `
     <div class="analysis-results-card">
+      <h2>Resume Analysis Complete</h2>
+      <p class="analysis-help">
+        Your analysis results and improved resume draft have been saved to your dashboard.
+      </p>
+
       <div class="analysis-score-grid">
         <div class="analysis-score-card">
           <span>${escapeAnalysisHtml(analysis.overall_score || 0)}</span>
@@ -145,30 +151,58 @@ function renderAnalysisResults(result) {
 
       <div class="analysis-saved-box">
         <strong>Saved to your dashboard:</strong>
-        <p>${escapeAnalysisHtml(result.saved_resume?.title || "Analysed resume")}</p>
+        <p>${escapeAnalysisHtml(savedTitle)}</p>
+        <p class="analysis-help">
+          Open your dashboard to review saved versions, edit your resume, and download the PDF.
+        </p>
         <a class="analysis-btn analysis-btn-secondary" href="/dashboard/">Open Dashboard</a>
       </div>
 
-      <h3>Strengths</h3>
+      <h3>Step 1: What We Found</h3>
+
+      <h4>Strengths</h4>
       ${renderList(analysis.strengths)}
 
-      <h3>Weaknesses</h3>
+      <h4>Areas For Improvement</h4>
       ${renderList(analysis.weaknesses)}
 
-      <h3>Specific Improvements</h3>
+      <h4>Specific Improvements</h4>
       ${renderList(analysis.specific_improvements)}
 
-      <h3>ATS Recommendations</h3>
+      <h4>ATS Recommendations</h4>
       ${renderList(analysis.ats_recommendations)}
 
-      <h3>Keyword Analysis</h3>
+      <h4>Keyword Analysis</h4>
       ${renderObjectAsList(analysis.keyword_analysis)}
 
-      <h3>Section Analysis</h3>
+      <h4>Section Analysis</h4>
       ${renderObjectAsList(analysis.sections_analysis)}
 
-      <h3>Improved Resume</h3>
+      <h3>Step 2: Improved Resume Draft</h3>
+      <div class="analysis-saved-box">
+        <strong>Review before using.</strong>
+        <p>
+          This improved version has been created using the recommendations from your analysis.
+          Please review the content carefully and ensure all information remains accurate before using it in a job application.
+        </p>
+        <p>
+          This improved resume has not yet been re-analysed. If you make further changes,
+          run another analysis to review the updated version.
+        </p>
+      </div>
+
       <pre class="analysis-improved-resume">${escapeAnalysisHtml(result.improved_resume || "")}</pre>
+
+      <h3>Step 3: Next Steps</h3>
+      <div class="analysis-saved-box">
+        <ul>
+          <li>Review the improved resume draft for accuracy.</li>
+          <li>Edit the saved resume from your dashboard if needed.</li>
+          <li>Run another analysis after editing to check the updated version.</li>
+          <li>Download your final PDF from the dashboard.</li>
+        </ul>
+        <a class="analysis-btn" href="/dashboard/">Open Dashboard</a>
+      </div>
     </div>
   `;
 }
@@ -282,7 +316,7 @@ async function analyzeResume(event) {
   }
 
   setAnalysisButtonLoading(button, true, "Analysing...");
-  showAnalysisNotice("Analysing your resume. Your results will be saved to your dashboard when complete.", "info");
+  showAnalysisNotice("Analysing your resume. Your results and improved resume draft will be saved to your dashboard when complete.", "info");
 
   if (output) {
     output.innerHTML = "";
@@ -328,7 +362,7 @@ async function analyzeResume(event) {
       return;
     }
 
-    showAnalysisNotice("Resume analysis complete. Your results have been saved to your dashboard.", "success");
+    showAnalysisNotice("Resume analysis complete. Review the improved resume draft below, then open your dashboard to edit or download.", "success");
     renderAnalysisResults(result);
     await checkAnalysisAvailability();
 
@@ -353,7 +387,7 @@ function initialiseResumeAnalysisPage() {
       <div class="analysis-hero">
         <p class="analysis-kicker">Hire Ready Premium Tool</p>
         <h1>Resume Optimiser & ATS Analysis</h1>
-        <p>Choose a saved resume or upload an existing file, receive an ATS-focused analysis, and save the results directly to your dashboard.</p>
+        <p>Choose a saved resume or upload an existing file, receive an ATS-focused analysis, and review an improved resume draft saved to your dashboard.</p>
       </div>
 
       <div id="analysis-notice" class="analysis-notice"></div>
