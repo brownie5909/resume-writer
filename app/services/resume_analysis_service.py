@@ -1,5 +1,6 @@
 import json
 import uuid
+import re
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -75,6 +76,29 @@ def get_resume_version_limit(current_user: dict) -> Optional[int]:
 
 def get_month_key() -> str:
     return datetime.now().strftime("%Y-%m")
+
+
+def clean_resume_label(value: Optional[str]) -> str:
+    """Create a readable base label from a filename or saved resume title."""
+    label = (value or "Resume").strip()
+    label = re.sub(r"\.(pdf|docx?|txt|rtf)$", "", label, flags=re.IGNORECASE)
+    label = re.sub(r"\s+-\s+Improved(\s+Resume)?(\s+for\s+.+)?$", "", label, flags=re.IGNORECASE)
+    label = re.sub(r"^Analysed Resume\s+-\s+", "", label, flags=re.IGNORECASE)
+    return label.strip() or "Resume"
+
+
+def build_improved_resume_title(
+    original_label: Optional[str],
+    target_role: Optional[str] = None,
+) -> str:
+    """Return a clear title for the improved resume saved after analysis."""
+    base_label = clean_resume_label(original_label)
+    cleaned_role = (target_role or "").strip()
+
+    if cleaned_role:
+        return f"{base_label} - Improved for {cleaned_role}"
+
+    return f"{base_label} - Improved Resume"
 
 
 def get_resume_analysis_usage(user_id: str) -> int:
@@ -153,7 +177,7 @@ def create_or_update_analysis_resume_document(
     title: str,
     improved_resume: str,
 ) -> Dict:
-    """Save the improved analysed resume into the user's editable resume documents."""
+    """Save an improved uploaded resume into the user's editable resume documents."""
     user_id = current_user["user_id"]
     saved_resume_limit = get_saved_resume_limit(current_user)
     saved_resumes = list_resume_documents(user_id)
@@ -177,6 +201,42 @@ def create_or_update_analysis_resume_document(
         cover_letter_text="",
         template="default",
         pdf_filename=None,
+    )
+
+
+def save_improved_analysis_resume_document(
+    current_user: dict,
+    improved_resume: str,
+    original_label: Optional[str],
+    target_role: Optional[str] = None,
+    source_document: Optional[Dict] = None,
+) -> Dict:
+    """
+    Save the improved resume produced by analysis.
+
+    If the analysis was run on an existing saved resume, update that document using
+    the existing versioning system so the previous resume remains in Version History.
+    If the analysis was run on an uploaded file, create a clear improved resume document,
+    or overwrite the Basic user's single saved resume while preserving a version snapshot.
+    """
+    title = build_improved_resume_title(original_label, target_role)
+
+    if source_document:
+        return update_resume_document(
+            user_id=current_user["user_id"],
+            document_id=source_document["document_id"],
+            title=title,
+            resume_text=improved_resume,
+            cover_letter_text=source_document.get("cover_letter_text", ""),
+            template=source_document.get("template", "default"),
+            pdf_filename=None,
+            max_versions=get_resume_version_limit(current_user),
+        )
+
+    return create_or_update_analysis_resume_document(
+        current_user=current_user,
+        title=title,
+        improved_resume=improved_resume,
     )
 
 
