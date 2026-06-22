@@ -5,11 +5,12 @@ from app.utils.file_parser import extract_text_from_file
 from app.services.openai_service import analyze_resume_with_ai
 from app.services.resume_analysis_service import (
     can_run_resume_analysis,
-    create_or_update_analysis_resume_document,
+    clean_resume_label,
     get_latest_resume_analysis_for_document,
     increment_resume_analysis_usage,
     list_resume_analysis_results,
     prune_basic_analysis_results,
+    save_improved_analysis_resume_document,
     save_resume_analysis_result,
 )
 from app.services.resume_document_service import get_resume_document
@@ -74,7 +75,7 @@ async def analyse_resume_text_and_save(
     target_role: Optional[str] = None,
     source_document_id: Optional[str] = None,
 ):
-    """Run resume analysis on supplied text and save the result."""
+    """Run resume analysis on supplied text and save the improved resume/result."""
     usage_status = can_run_resume_analysis(current_user)
     if not usage_status["can_run"]:
         return JSONResponse(
@@ -92,6 +93,18 @@ async def analyse_resume_text_and_save(
             detail="Could not find enough resume text to analyse. Please choose a fuller saved resume or upload a file."
         )
 
+    source_document = None
+    original_label = clean_resume_label(original_filename)
+
+    if source_document_id:
+        source_document = get_resume_document(
+            user_id=current_user["user_id"],
+            document_id=source_document_id,
+        )
+        if not source_document:
+            raise HTTPException(status_code=404, detail="Saved resume not found")
+        original_label = source_document.get("title") or original_label
+
     ai_result = await analyze_resume_with_ai(
         resume_text=text_content,
         target_role=target_role
@@ -100,20 +113,13 @@ async def analyse_resume_text_and_save(
     analysis = build_analysis_payload(ai_result)
     improved_resume = ai_result.get("improved_resume", "No improved resume generated.")
 
-    if source_document_id:
-        saved_document = get_resume_document(
-            user_id=current_user["user_id"],
-            document_id=source_document_id,
-        )
-        if not saved_document:
-            raise HTTPException(status_code=404, detail="Saved resume not found")
-    else:
-        resume_title = f"Analysed Resume - {target_role}" if target_role else f"Analysed Resume - {original_filename}"
-        saved_document = create_or_update_analysis_resume_document(
-            current_user=current_user,
-            title=resume_title,
-            improved_resume=improved_resume,
-        )
+    saved_document = save_improved_analysis_resume_document(
+        current_user=current_user,
+        improved_resume=improved_resume,
+        original_label=original_label,
+        target_role=target_role,
+        source_document=source_document,
+    )
 
     saved_analysis = save_resume_analysis_result(
         user_id=current_user["user_id"],
@@ -135,6 +141,12 @@ async def analyse_resume_text_and_save(
         "analysis": analysis,
         "improved_resume": improved_resume,
         "document_id": saved_document.get("document_id"),
+        "source_resume": {
+            "document_id": source_document.get("document_id") if source_document else None,
+            "title": original_label,
+            "source_type": "saved_resume" if source_document else "uploaded_file",
+            "filename": original_filename,
+        },
         "saved_resume": {
             "document_id": saved_document.get("document_id"),
             "title": saved_document.get("title"),
