@@ -84,6 +84,7 @@ def clean_resume_label(value: Optional[str]) -> str:
     label = re.sub(r"\.(pdf|docx?|txt|rtf)$", "", label, flags=re.IGNORECASE)
     label = re.sub(r"\s+-\s+Improved(\s+Resume)?(\s+for\s+.+)?$", "", label, flags=re.IGNORECASE)
     label = re.sub(r"^Analysed Resume\s+-\s+", "", label, flags=re.IGNORECASE)
+    label = re.sub(r"\s+v\d+$", "", label, flags=re.IGNORECASE)
     return label.strip() or "Resume"
 
 
@@ -91,7 +92,7 @@ def build_improved_resume_title(
     original_label: Optional[str],
     target_role: Optional[str] = None,
 ) -> str:
-    """Return a clear title for the improved resume saved after analysis."""
+    """Return a clear title for the first improved resume saved after upload analysis."""
     base_label = clean_resume_label(original_label)
     cleaned_role = (target_role or "").strip()
 
@@ -99,6 +100,24 @@ def build_improved_resume_title(
         return f"{base_label} - Improved for {cleaned_role}"
 
     return f"{base_label} - Improved Resume"
+
+
+def next_resume_version_title(user_id: str, source_title: Optional[str]) -> str:
+    """Return the next visible v2/v3/v4 title for an improved saved resume."""
+    base_label = clean_resume_label(source_title)
+    highest_version = 1
+
+    for resume in list_resume_documents(user_id):
+        title = (resume.get("title") or "").strip()
+        if title == base_label:
+            highest_version = max(highest_version, 1)
+            continue
+
+        match = re.match(rf"^{re.escape(base_label)}\s+v(\d+)$", title, flags=re.IGNORECASE)
+        if match:
+            highest_version = max(highest_version, int(match.group(1)))
+
+    return f"{base_label} v{highest_version + 1}"
 
 
 def get_resume_analysis_usage(user_id: str) -> int:
@@ -214,16 +233,30 @@ def save_improved_analysis_resume_document(
     """
     Save the improved resume produced by analysis.
 
-    If the analysis was run on an existing saved resume, update that document using
-    the existing versioning system so the previous resume remains in Version History.
-    If the analysis was run on an uploaded file, create a clear improved resume document,
-    or overwrite the Basic user's single saved resume while preserving a version snapshot.
+    Basic keeps the existing one-resume overwrite/version-history behaviour.
+    Premium and Professional create a new visible resume document when analysing
+    an existing saved resume, using v2/v3/v4 style titles.
+    Uploaded files still create a clear improved resume document.
     """
+    user_id = current_user["user_id"]
+    saved_resume_limit = get_saved_resume_limit(current_user)
+
+    if source_document and saved_resume_limit is None:
+        new_title = next_resume_version_title(user_id, source_document.get("title") or original_label)
+        return create_resume_document(
+            user_id=user_id,
+            title=new_title,
+            resume_text=improved_resume,
+            cover_letter_text=source_document.get("cover_letter_text", ""),
+            template=source_document.get("template", "default"),
+            pdf_filename=None,
+        )
+
     title = build_improved_resume_title(original_label, target_role)
 
     if source_document:
         return update_resume_document(
-            user_id=current_user["user_id"],
+            user_id=user_id,
             document_id=source_document["document_id"],
             title=title,
             resume_text=improved_resume,
@@ -345,7 +378,7 @@ def get_resume_analysis_result(user_id: str, analysis_id: str) -> Optional[Dict]
 
 
 def get_latest_resume_analysis_for_document(user_id: str, document_id: str) -> Optional[Dict]:
-    """Return the latest analysis result linked to a saved resume document."""
+    """Return the latest analysis result linked to one of the user's saved resumes."""
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
