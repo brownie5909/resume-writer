@@ -15,6 +15,7 @@ Hire Ready Resume Standard:
 - Use standard section headings such as Professional Summary, Key Skills, Professional Experience, Education, Certifications and Referees.
 - Bullet points are recommended for Professional Experience sections.
 - Use 3 to 5 concise bullet points per recent role where enough detail exists.
+- If a role has more than 5 bullet points, consolidate or remove lower-value points while keeping the strongest achievements.
 - Do not recommend removing bullet points from experience sections unless they are excessive, unclear, duplicated or poorly formatted.
 - Avoid dense paragraphs in Professional Experience.
 - A short 3 to 5 line Professional Summary is acceptable.
@@ -22,8 +23,31 @@ Hire Ready Resume Standard:
 - Prefer measurable achievements where supported by the resume text.
 - Do not invent employers, dates, qualifications, certifications, systems, metrics or achievements.
 - Missing keywords should be relevant to the target role and should be incorporated naturally where truthful.
-- The improved resume should directly address the listed weaknesses, missing keywords and ATS recommendations.
+- The improved resume must directly apply every fixable weakness, missing keyword and ATS recommendation.
 - The improved resume should normally maintain or improve ATS readability compared with the original resume.
+"""
+
+
+FIXABLE_IMPROVEMENT_RULES = """
+Critical improved resume rules:
+- The improved_resume must implement every recommendation that can be completed without inventing information.
+- If you identify a formatting issue, fix it in improved_resume.
+- If you identify a section heading issue, fix it in improved_resume.
+- If you identify an education wording issue, fix it in improved_resume.
+- If education dates appear to be future completion dates, rewrite them as "In Progress - Expected Completion YYYY" where appropriate.
+- If you identify a bullet point count issue, fix it in improved_resume by consolidating to 3 to 5 concise bullet points per role where possible.
+- If you identify dense or complex bullet points, simplify them in improved_resume.
+- If you identify ATS readability issues, fix them in improved_resume.
+- If you identify keyword placement issues, fix them in improved_resume where truthful.
+- Do not leave correctable weaknesses in improved_resume.
+- Weaknesses should focus on remaining issues that require user input, evidence, additional achievements, missing metrics, missing certifications, or missing details that cannot be safely inferred.
+- Do not include a weakness that has already been corrected in improved_resume.
+
+Final validation before returning JSON:
+- Compare weaknesses, specific_improvements and ats_recommendations against improved_resume.
+- If an item can be fixed through formatting, wording, headings, structure, bullet consolidation, date clarification or keyword placement, implement it in improved_resume before returning JSON.
+- After applying fixable items, remove those items from weaknesses.
+- Keep recommendations only when they require information the user must provide, such as quantified achievements, project examples, certification details, referee details or other facts not present in the original resume.
 """
 
 
@@ -163,7 +187,8 @@ def _call_openai(prompt: str) -> str:
                     "Resume Standard consistently on every analysis. Do not invent facts "
                     "that are not supported by the resume text. Do not give contradictory "
                     "formatting advice across analyses. Do not list a keyword as missing "
-                    "if it already appears anywhere in the resume text."
+                    "if it already appears anywhere in the resume text. The improved_resume "
+                    "must apply all fixable recommendations before JSON is returned."
                 ),
             },
             {"role": "user", "content": prompt},
@@ -194,6 +219,8 @@ Do not change the standard between analyses.
 
 {HIRE_READY_RESUME_STANDARD}
 
+{FIXABLE_IMPROVEMENT_RULES}
+
 Important rules:
 - Return ONLY valid JSON.
 - Do not include markdown fences.
@@ -210,6 +237,8 @@ Important rules:
 - The improved_resume must address the weaknesses, keyword gaps, section feedback and ATS recommendations you provide.
 - The improved_resume should be at least as ATS-friendly as the original resume and should not intentionally reduce formatting quality.
 - If the original resume is already strong, make careful refinements rather than unnecessary rewrites.
+- Do not include a weakness or specific improvement for a fixable formatting or structure issue unless it remains unresolved in improved_resume.
+- Remaining weaknesses should mainly identify items requiring user-supplied facts, such as metrics, examples, certifications, project details, dates, referee details or achievements not present in the original resume.
 
 Resume:
 {cleaned_resume_text}
