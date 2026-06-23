@@ -160,13 +160,13 @@ function renderAnalysisResults(result) {
 
       <h3>Step 1: What We Found</h3>
 
-      <h4>Strengths</h4>
+      <h4>What's Working Well</h4>
       ${renderList(analysis.strengths)}
 
-      <h4>Areas For Improvement</h4>
+      <h4>Remaining Improvement Opportunities</h4>
       ${renderList(analysis.weaknesses)}
 
-      <h4>Specific Improvements</h4>
+      <h4>Suggested Enhancements</h4>
       ${renderList(analysis.specific_improvements)}
 
       <h4>ATS Recommendations</h4>
