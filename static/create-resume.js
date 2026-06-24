@@ -3,12 +3,41 @@ console.log("Hire Ready create-resume.js loaded");
 (function () {
   const API_BASE = "https://resume-writer.onrender.com";
 
-  function isAuthenticated() {
-    return Boolean(window.HireReady && window.HireReady.API && window.HireReady.API.isAuthenticated());
-  }
-
   function getToken() {
     return localStorage.getItem("hire_ready_token");
+  }
+
+  function isAuthenticated() {
+    return Boolean(getToken());
+  }
+
+  async function generateAuthenticatedResume(requestData) {
+    if (window.HireReady && window.HireReady.API && typeof window.HireReady.API.generateResume === "function") {
+      return window.HireReady.API.generateResume(requestData);
+    }
+
+    const apiResponse = await fetch(`${API_BASE}/api/generate-resume`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`
+      },
+      body: JSON.stringify(requestData)
+    });
+
+    return apiResponse.json();
+  }
+
+  async function getAuthenticatedUser() {
+    if (window.HireReady && window.HireReady.API && typeof window.HireReady.API.getCurrentUser === "function") {
+      return window.HireReady.API.getCurrentUser();
+    }
+
+    try {
+      return JSON.parse(localStorage.getItem("hire_ready_user") || "{}");
+    } catch (error) {
+      return {};
+    }
   }
 
   function escapeHtml(value) {
@@ -164,6 +193,7 @@ console.log("Hire Ready create-resume.js loaded");
     `;
 
     setupFormSubmission();
+    updateAuthStatus();
     window.setTimeout(updateAuthStatus, 1200);
   }
 
@@ -179,7 +209,7 @@ console.log("Hire Ready create-resume.js loaded");
       `;
 
       try {
-        const userInfo = await window.HireReady.API.getCurrentUser();
+        const userInfo = await getAuthenticatedUser();
         const nameField = document.querySelector('[name="full_name"]');
         const emailField = document.querySelector('[name="email"]');
 
@@ -232,7 +262,7 @@ console.log("Hire Ready create-resume.js loaded");
             ? "Replacing Saved Resume..."
             : "Generating Resume...";
 
-          response = await window.HireReady.API.generateResume(requestData);
+          response = await generateAuthenticatedResume(requestData);
         } else {
           submitBtn.textContent = "Generating Resume...";
 
