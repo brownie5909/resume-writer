@@ -50,22 +50,13 @@ def auto_create_admin_from_env() -> Dict:
         existing_user = cursor.fetchone()
 
         if existing_user:
-            user_id = existing_user["user_id"]
-            cursor.execute(
-                """
-                UPDATE users
-                SET password_hash = ?,
-                    full_name = ?,
-                    tier = 'professional',
-                    is_verified = TRUE,
-                    is_active = TRUE,
-                    is_admin = TRUE,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE user_id = ?
-                """,
-                (password_hash, full_name, user_id),
-            )
-            action = "updated"
+            return {
+                "enabled": True,
+                "success": True,
+                "action": "skipped_existing_user",
+                "email": email,
+                "message": "Existing user was not modified by admin bootstrap"
+            }
         else:
             user_id = str(uuid.uuid4())
             cursor.execute(
