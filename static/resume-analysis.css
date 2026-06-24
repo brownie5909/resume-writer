@@ -99,7 +99,8 @@
 }
 
 .analysis-form input[type="file"],
-.analysis-form input[type="text"] {
+.analysis-form input[type="text"],
+.analysis-form select {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #d0d5dd;
@@ -109,11 +110,22 @@
   background: #ffffff;
 }
 
+.analysis-form select {
+  min-height: 52px;
+  height: auto;
+  line-height: 1.4;
+  padding: 12px 42px 12px 14px;
+  appearance: auto;
+  -webkit-appearance: menulist;
+  -moz-appearance: auto;
+}
+
 .analysis-form input[type="file"] {
   padding: 11px;
 }
 
-.analysis-form input:focus {
+.analysis-form input:focus,
+.analysis-form select:focus {
   outline: none;
   border-color: #1e73be;
   box-shadow: 0 0 0 3px rgba(30, 115, 190, 0.15);
