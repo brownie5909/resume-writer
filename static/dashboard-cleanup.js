@@ -8,16 +8,30 @@ console.log('Hire Ready dashboard-cleanup.js loaded');
     if (status) status.style.display = 'none';
     if (list) list.style.display = 'none';
 
-    const headings = Array.from(document.querySelectorAll('h2'));
-    headings.forEach((heading) => {
+    Array.from(document.querySelectorAll('h2')).forEach((heading) => {
       if ((heading.textContent || '').trim() === 'My Analyses') {
         heading.style.display = 'none';
       }
     });
   }
 
+  function updateAnalysisHeadings() {
+    Array.from(document.querySelectorAll('h3')).forEach((heading) => {
+      const label = (heading.textContent || '').trim();
+      if (label === 'Strengths') heading.textContent = "What's Working Well";
+      if (label === 'Weaknesses') heading.textContent = 'Remaining Improvement Opportunities';
+      if (label === 'Specific Improvements') heading.textContent = 'Suggested Enhancements';
+    });
+  }
+
+  function runCleanup() {
+    removeAnalysesSection();
+    updateAnalysisHeadings();
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
-    setTimeout(removeAnalysesSection, 500);
-    setTimeout(removeAnalysesSection, 1500);
+    setTimeout(runCleanup, 500);
+    setTimeout(runCleanup, 1500);
+    setInterval(updateAnalysisHeadings, 1000);
   });
 })();
