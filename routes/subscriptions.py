@@ -115,6 +115,17 @@ def cancel_user_subscription_access(subscription_id: Optional[str]) -> None:
         conn.commit()
 
 
+def disabled_subscription_management_response():
+    raise HTTPException(
+        status_code=410,
+        detail={
+            "error": "This legacy subscription management endpoint is disabled.",
+            "message": "Use the Stripe Customer Portal for subscription changes, cancellations and billing history.",
+            "portal_endpoint": "/api/subscriptions/customer-portal",
+        },
+    )
+
+
 @router.post("/subscriptions/create-checkout")
 async def create_checkout_session(
     tier: str,
@@ -172,7 +183,8 @@ async def create_checkout_session(
         }
 
     except Exception as error:
-        raise HTTPException(status_code=502, detail=f"Stripe checkout error: {str(error)}")
+        print(f"❌ Stripe checkout error: {str(error)}")
+        raise HTTPException(status_code=502, detail="Stripe checkout could not be started. Please try again.")
 
 
 @router.get("/subscriptions/current")
@@ -208,46 +220,14 @@ async def change_subscription_tier(
     new_tier: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Change subscription tier (mock for testing)."""
-    if new_tier not in ["free", "basic", "premium", "professional"]:
-        raise HTTPException(status_code=400, detail="Invalid tier")
-
-    current_tier = current_user["tier"]
-
-    if new_tier == current_tier:
-        raise HTTPException(status_code=400, detail="Already on this tier")
-
-    if new_tier in ("free", "basic"):
-        return {
-            "message": "Subscription would be canceled (mock)",
-            "tier": "basic",
-            "note": "In production, this would cancel the Stripe subscription",
-        }
-    elif current_tier in ("free", "basic"):
-        return {
-            "message": f"Would create new {new_tier} subscription (mock)",
-            "tier": new_tier,
-            "note": "In production, this would create a new Stripe subscription",
-        }
-    else:
-        return {
-            "message": f"Would change from {current_tier} to {new_tier} (mock)",
-            "tier": new_tier,
-            "note": "In production, this would modify the existing subscription",
-        }
+    """Disabled legacy endpoint. Use Stripe Customer Portal instead."""
+    disabled_subscription_management_response()
 
 
 @router.post("/subscriptions/cancel")
 async def cancel_user_subscription(current_user: dict = Depends(get_current_user)):
-    """Cancel current subscription (mock for testing)."""
-    if current_user["tier"] in ("free", "basic"):
-        raise HTTPException(status_code=400, detail="No active subscription to cancel")
-
-    return {
-        "message": f"Would cancel {current_user['tier']} subscription (mock)",
-        "tier": "basic",
-        "note": "In production, this would cancel the Stripe subscription at period end",
-    }
+    """Disabled legacy endpoint. Use Stripe Customer Portal instead."""
+    disabled_subscription_management_response()
 
 
 @router.post("/subscriptions/billing-portal")
@@ -255,18 +235,8 @@ async def create_billing_portal_session(
     return_url: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create billing portal session (mock for testing)."""
-    customer_id = current_user.get("stripe_customer_id")
-    if not customer_id:
-        return {
-            "portal_url": f"https://billing.stripe.com/mock?return_url={return_url}",
-            "message": "Mock billing portal - would redirect to Stripe in production",
-        }
-
-    return {
-        "portal_url": f"https://billing.stripe.com/mock/{customer_id}?return_url={return_url}",
-        "message": "Mock billing portal for existing customer",
-    }
+    """Disabled legacy endpoint. Use /subscriptions/customer-portal instead."""
+    disabled_subscription_management_response()
 
 
 @router.get("/subscriptions/invoices")
@@ -274,28 +244,8 @@ async def get_invoices(
     current_user: dict = Depends(get_current_user),
     limit: int = 10,
 ):
-    """Get user's billing invoices (mock for testing)."""
-    customer_id = current_user.get("stripe_customer_id")
-    if not customer_id:
-        return {"invoices": []}
-
-    mock_invoices = [
-        {
-            "id": f"inv_mock_{i}",
-            "amount_paid": 1900 if current_user["tier"] == "premium" else 3900,
-            "amount_due": 0,
-            "currency": "usd",
-            "status": "paid",
-            "created": datetime.now() - timedelta(days=30 * i),
-            "period_start": datetime.now() - timedelta(days=30 * (i + 1)),
-            "period_end": datetime.now() - timedelta(days=30 * i),
-            "invoice_pdf": f"https://invoice.stripe.com/mock_{i}.pdf",
-            "hosted_invoice_url": f"https://invoice.stripe.com/mock_{i}",
-        }
-        for i in range(min(3, limit))
-    ]
-
-    return {"invoices": mock_invoices}
+    """Disabled legacy endpoint. Use Stripe Customer Portal instead."""
+    disabled_subscription_management_response()
 
 
 @router.post("/subscriptions/webhook")
@@ -351,5 +301,5 @@ async def handle_stripe_webhook(request: Request):
         print(f"❌ Stripe webhook error: {str(error)}")
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": f"Stripe webhook error: {str(error)}"},
+            content={"success": False, "error": "Stripe webhook could not be processed"},
         )
