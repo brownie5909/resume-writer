@@ -1,39 +1,15 @@
 # Copy this EXACTLY into: routes/cover_letter.py
 
-from fastapi import APIRouter, UploadFile, File, Form, Request, Depends
+from fastapi import APIRouter, UploadFile, File, Form, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 import os
-import asyncio
 import aiohttp
 import re
 import json
 from typing import Optional, Dict, Any, List
 from .user_management import require_feature_access_auth
-from .cover_letter_helpers import (
-    ai_generate_cover_letter, 
-    extract_role_from_posting, 
-    extract_company_from_posting,
-    generate_enhanced_template_cover_letter
-)
 
 router = APIRouter()
-
-# Models for request/response validation
-class CoverLetterAnalysisInput(BaseModel):
-    cover_letter_text: str
-    target_role: Optional[str] = None
-    job_posting: Optional[str] = None
-    company_name: Optional[str] = None
-
-class CoverLetterGenerationInput(BaseModel):
-    job_posting: str
-    applicant_name: str
-    current_role: Optional[str] = None
-    experience: Optional[str] = None
-    achievements: Optional[str] = None
-    company_name: Optional[str] = None
-    tone_preference: Optional[str] = "professional"
 
 def extract_json_content(content: str) -> str:
     """Enhanced JSON extraction from AI response"""
@@ -478,106 +454,6 @@ async def analyze_cover_letter(
         
     except Exception as e:
         print(f"❌ Cover letter analysis error: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Analysis failed: {str(e)}"}
-        )
-
-@router.post("/generate-cover-letter")
-async def generate_cover_letter(payload: CoverLetterGenerationInput):
-    """
-    AI-powered cover letter generation based on job posting and applicant information
-    """
-    
-    try:
-        print(f"✨ Generating AI-powered cover letter for {payload.applicant_name}")
-        print(f"🎯 Job posting length: {len(payload.job_posting)} characters")
-        print(f"🎨 Tone preference: {payload.tone_preference}")
-        
-        # Generate cover letter using AI helper function
-        cover_letter = await ai_generate_cover_letter(
-            job_posting=payload.job_posting,
-            applicant_name=payload.applicant_name,
-            current_role=payload.current_role,
-            experience=payload.experience,
-            achievements=payload.achievements,
-            company_name=payload.company_name,
-            tone_preference=payload.tone_preference
-        )
-        
-        # Perform quick analysis of generated letter
-        analysis = await ai_analyze_cover_letter(
-            cover_letter_text=cover_letter,
-            target_role=extract_role_from_posting(payload.job_posting),
-            job_posting=payload.job_posting,
-            company_name=payload.company_name
-        )
-        
-        return JSONResponse({
-            "success": True,
-            "cover_letter": cover_letter,
-            "analysis": analysis,
-            "applicant_name": payload.applicant_name,
-            "company_name": payload.company_name,
-            "generated_for": payload.job_posting[:100] + "..." if len(payload.job_posting) > 100 else payload.job_posting,
-            "tone_used": payload.tone_preference,
-            "ai_powered": os.getenv("OPENAI_API_KEY") is not None
-        })
-        
-    except Exception as e:
-        print(f"❌ Cover letter generation error: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Generation failed: {str(e)}"}
-        )
-
-@router.post("/analyze-cover-letter-text")
-async def analyze_cover_letter_text(payload: CoverLetterAnalysisInput):
-    """
-    Analyze cover letter text directly without file upload
-    """
-    
-    try:
-        print(f"📝 Starting AI text analysis (length: {len(payload.cover_letter_text)} chars)")
-        print(f"🎯 Target role: {payload.target_role}")
-        
-        # Validate content length
-        if len(payload.cover_letter_text.strip()) < 50:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Cover letter content is too short. Please provide a complete cover letter."}
-            )
-        
-        # Perform AI analysis
-        analysis_result = await ai_analyze_cover_letter(
-            cover_letter_text=payload.cover_letter_text,
-            target_role=payload.target_role,
-            job_posting=payload.job_posting,
-            company_name=payload.company_name
-        )
-        
-        # Generate improved version
-        improved_cover_letter = await ai_improve_cover_letter(
-            original_text=payload.cover_letter_text,
-            analysis=analysis_result,
-            target_role=payload.target_role,
-            company_name=payload.company_name,
-            job_posting=payload.job_posting
-        )
-        
-        return JSONResponse({
-            "success": True,
-            "analysis": analysis_result,
-            "improved_cover_letter": improved_cover_letter,
-            "original_length": len(payload.cover_letter_text),
-            "improved_length": len(improved_cover_letter),
-            "target_role": payload.target_role,
-            "company_name": payload.company_name,
-            "ai_powered": os.getenv("OPENAI_API_KEY") is not None
-        })
-        
-    except Exception as e:
-        print(f"❌ Cover letter text analysis error: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": f"Analysis failed: {str(e)}"}
