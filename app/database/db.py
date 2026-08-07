@@ -231,6 +231,17 @@ def init_database():
             )
         """)
         _execute_schema(cursor, """
+            CREATE TABLE IF NOT EXISTS guest_usage_tracking (
+                usage_id TEXT PRIMARY KEY,
+                ip_hash TEXT NOT NULL,
+                feature_name TEXT NOT NULL,
+                usage_date TEXT NOT NULL,
+                usage_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(ip_hash, feature_name, usage_date)
+            )
+        """)
+        _execute_schema(cursor, """
             CREATE TABLE IF NOT EXISTS password_reset_tokens (
                 reset_id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
