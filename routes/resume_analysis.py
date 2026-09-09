@@ -1,12 +1,15 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from app.utils.file_parser import extract_text_from_file
 from app.services.openai_service import analyze_resume_with_ai
 from app.services.resume_analysis_service import (
+    build_guest_analysis_teaser,
+    can_run_guest_resume_analysis,
     can_run_resume_analysis,
     clean_resume_label,
     get_latest_resume_analysis_for_document,
+    increment_guest_resume_analysis_usage,
     increment_resume_analysis_usage,
     list_resume_analysis_results,
     prune_basic_analysis_results,
@@ -309,6 +312,89 @@ async def analyze_resume(
 
     except Exception as e:
         print(f"❌ Resume analysis error: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": f"Analysis failed: {str(e)}"
+            }
+        )
+
+
+@router.post("/analyze-resume-guest")
+async def analyze_resume_guest(
+    request: Request,
+    file: UploadFile = File(...),
+    target_role: Optional[str] = Form(None),
+):
+    """Limited, unauthenticated resume analysis teaser. No auth, no persistence."""
+    try:
+        validate_file(file)
+
+        usage_status = can_run_guest_resume_analysis(request)
+        if not usage_status["can_run"]:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "success": False,
+                    "error": usage_status["message"],
+                    "requires_registration": True,
+                    "register_url": "/login/",
+                },
+            )
+
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > MAX_FILE_SIZE + (1 * 1024 * 1024):
+            raise HTTPException(
+                status_code=400,
+                detail=f"File too large. Max size: {MAX_FILE_SIZE // (1024 * 1024)}MB"
+            )
+
+        file_bytes = await file.read()
+
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+        if len(file_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File too large. Max size: {MAX_FILE_SIZE // (1024 * 1024)}MB"
+            )
+
+        await file.seek(0)
+
+        text_content = await extract_text_from_file(file)
+
+        if not text_content or len(text_content.strip()) < 50:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Could not extract enough text from the resume. "
+                    "Please upload a clearer PDF, DOCX, or TXT file."
+                )
+            )
+
+        ai_result = await analyze_resume_with_ai(
+            resume_text=text_content,
+            target_role=target_role,
+        )
+
+        increment_guest_resume_analysis_usage(usage_status["ip_hash"])
+
+        return JSONResponse(content=jsonable_encoder({
+            "success": True,
+            "guest": True,
+            "analysis": build_guest_analysis_teaser(ai_result),
+            "message": "Create a free account to see your full breakdown, get an ATS-optimised rewrite, and save your results.",
+            "requires_registration_for_full_report": True,
+            "register_url": "/login/",
+        }))
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        print(f"❌ Guest resume analysis error: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={

@@ -1,9 +1,14 @@
+import hashlib
+import hmac
 import json
 import uuid
 import re
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from fastapi import Request
+
+from app.core.security import SECRET_KEY
 from app.database.db import get_db
 from app.services.resume_document_service import (
     create_resume_document,
@@ -13,6 +18,11 @@ from app.services.resume_document_service import (
 from routes.user_management import get_user_tier_enhanced
 
 RESUME_ANALYSIS_FEATURE = "resume_analysis"
+
+GUEST_RESUME_ANALYSIS_FEATURE = "guest_resume_analysis"
+GUEST_IP_DAILY_LIMIT = 1
+GUEST_GLOBAL_DAILY_LIMIT = 200
+GUEST_GLOBAL_USAGE_KEY = "__global__"
 
 
 def row_to_dict(row) -> Optional[Dict]:
@@ -76,6 +86,109 @@ def get_resume_version_limit(current_user: dict) -> Optional[int]:
 
 def get_month_key() -> str:
     return datetime.now().strftime("%Y-%m")
+
+
+def get_day_key() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def get_client_ip(request: Request) -> str:
+    """Best-effort client IP behind Render's proxy: trust the first hop of X-Forwarded-For."""
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def hash_client_ip(ip_address: str) -> str:
+    """HMAC the client IP so raw IPs are never stored, keyed off the app SECRET_KEY."""
+    return hmac.new(SECRET_KEY.encode("utf-8"), ip_address.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _get_guest_usage_count(ip_hash: str) -> int:
+    day_key = get_day_key()
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT usage_count FROM guest_usage_tracking
+            WHERE ip_hash = ? AND feature_name = ? AND usage_date = ?
+            """,
+            (ip_hash, GUEST_RESUME_ANALYSIS_FEATURE, day_key),
+        )
+        result = cursor.fetchone()
+        return int(result["usage_count"] if result else 0)
+
+
+def can_run_guest_resume_analysis(request: Request) -> Dict:
+    """Return whether an anonymous visitor can run a guest resume analysis today."""
+    ip_hash = hash_client_ip(get_client_ip(request))
+    ip_usage = _get_guest_usage_count(ip_hash)
+    global_usage = _get_guest_usage_count(GUEST_GLOBAL_USAGE_KEY)
+
+    if global_usage >= GUEST_GLOBAL_DAILY_LIMIT:
+        return {
+            "can_run": False,
+            "ip_hash": ip_hash,
+            "message": "Guest resume analysis is at capacity for today. Please try again tomorrow, or create a free account to continue.",
+        }
+
+    if ip_usage >= GUEST_IP_DAILY_LIMIT:
+        return {
+            "can_run": False,
+            "ip_hash": ip_hash,
+            "message": "You've used your free guest resume analysis for today. Create a free account for more analyses and to save your results.",
+        }
+
+    return {"can_run": True, "ip_hash": ip_hash, "message": "Guest resume analysis is available."}
+
+
+def increment_guest_resume_analysis_usage(ip_hash: str) -> None:
+    """Increment both the per-IP and site-wide daily guest usage counters."""
+    day_key = get_day_key()
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        for key in (ip_hash, GUEST_GLOBAL_USAGE_KEY):
+            cursor.execute(
+                """
+                SELECT usage_count FROM guest_usage_tracking
+                WHERE ip_hash = ? AND feature_name = ? AND usage_date = ?
+                """,
+                (key, GUEST_RESUME_ANALYSIS_FEATURE, day_key),
+            )
+            result = cursor.fetchone()
+
+            if result:
+                cursor.execute(
+                    """
+                    UPDATE guest_usage_tracking
+                    SET usage_count = ?
+                    WHERE ip_hash = ? AND feature_name = ? AND usage_date = ?
+                    """,
+                    (int(result["usage_count"]) + 1, key, GUEST_RESUME_ANALYSIS_FEATURE, day_key),
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO guest_usage_tracking (usage_id, ip_hash, feature_name, usage_date, usage_count)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (str(uuid.uuid4()), key, GUEST_RESUME_ANALYSIS_FEATURE, day_key, 1),
+                )
+
+        conn.commit()
+
+
+def build_guest_analysis_teaser(ai_result: Dict) -> Dict:
+    """Return a limited teaser view of an analysis for anonymous guests."""
+    return {
+        "overall_score": ai_result.get("overall_score", 70),
+        "ats_score": ai_result.get("ats_score", 70),
+        "top_strengths": (ai_result.get("strengths") or [])[:2],
+        "top_improvements": (ai_result.get("specific_improvements") or ai_result.get("weaknesses") or [])[:3],
+    }
 
 
 def clean_resume_label(value: Optional[str]) -> str:

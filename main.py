@@ -26,7 +26,6 @@ from routes.billing_portal import router as billing_portal_router
 from routes.cover_letter import router as cover_letter_router
 from routes.cover_letter_generator import router as cover_letter_generator_router
 from routes.cover_letter_optimiser import router as cover_letter_optimiser_router
-from routes.interview import router as interview_router
 from routes.resume_analysis import router as resume_analysis_router
 from routes.resume_documents import router as resume_documents_router
 from routes.subscriptions import router as subscriptions_router
@@ -115,7 +114,6 @@ app.include_router(account_settings_router, prefix="/api", tags=["Account Settin
 app.include_router(billing_portal_router, prefix="/api", tags=["Billing Portal"])
 app.include_router(admin_router, prefix="/api", tags=["Admin Management"])
 app.include_router(subscriptions_router, prefix="/api", tags=["Subscription Management"])
-app.include_router(interview_router, prefix="/api", tags=["Interview"])
 app.include_router(resume_analysis_router, prefix="/api", tags=["Resume Analysis"])
 app.include_router(cover_letter_router, prefix="/api", tags=["Cover Letter"])
 app.include_router(cover_letter_optimiser_router, prefix="/api", tags=["Cover Letter Optimiser"])
